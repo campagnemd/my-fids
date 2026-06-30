@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Departures</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
+        
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            background-color: #051126;
+        }
+        .font-mono { 
+            font-family: 'Roboto Mono', 'Inter', monospace; 
+        }
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="text-white antialiased select-none">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const SERVICE_KEY = "ca528dec987f974b71365a40543ca4c094fa0a3afe15441db4136e49edc7c72c";
+        // 🛑 외부 프록시 제거: Vercel 내장 Rewrites 터널을 이용합니다.
+        const CACHE_DURATION = 10 * 60 * 1000; 
+
+        function App() {
+            const [currentTime, setCurrentTime] = useState(new Date());
+            const [flights, setFlights] = useState([]);
+            const [filteredFlights, setFilteredFlights] = useState([]);
+            const [currentPage, setCurrentPage] = useState(0);
+            const itemsPerPage = 11; 
+
+            const filteredFlightsRef = useRef([]);
+            useEffect(() => {
+                filteredFlightsRef.current = filteredFlights;
+            }, [filteredFlights]);
+
+            // 1. 실시간 디지털시계 가동 (1초 주기)
+            useEffect(() => {
+                const clockTimer = setInterval(() => setCurrentTime(new Date()), 1000);
+                return () => clearInterval(clockTimer);
+            }, []);
+
+            // 2. 10초 주기로 다음 페이지 무조건 플립(Flip)
+            useEffect(() => {
+                const pageTimer = setInterval(() => {
+                    const totalItems = filteredFlightsRef.current.length;
+                    if (totalItems > 0) {
+                        const actualMaxPage = Math.ceil(totalItems / itemsPerPage);
+                        const maxPageLimit = Math.min(actualMaxPage, 10); 
+                        
+                        setCurrentPage(p => (p + 1) % maxPageLimit);
+                    }
+                }, 10000); 
+
+                return () => clearInterval(pageTimer);
+            }, []);
+
+            // 3. API 데이터 연동 및 로컬 캐싱
+            const fetchFlightData = async (forceRefresh = false) => {
+                const cachedData = localStorage.getItem('fids_flights_data');
+                const cachedTime = localStorage.getItem('fids_flights_timestamp');
+                const nowTimestamp = Date.now();
+
+                if (!forceRefresh && cachedData && cachedTime && (nowTimestamp - cachedTime < CACHE_DURATION)) {
+                    setFlights(JSON.parse(cachedData));
+                    return;
+                }
+
+                try {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const todayStr = `${year}${month}${day}`;
+
+                    const params = new URLSearchParams({
+                        serviceKey: SERVICE_KEY,
+                        type: 'json',
+                        numOfRows: '1500', 
+                        pageNo: '1',
+                        searchDate: todayStr,     
+                        searchdtCode: 'S',        
+                        passengerOrCargo: 'P'     
+                    });
+
+                    // 🛠️ Vercel Rewrites 용 백엔드 프록시 경로로 주소 전면 전격 교체
+                    const targetUrl = `/api/icn/B551177/statusOfAllFltDeOdp/getFltDeparturesDeOdp?${params.toString()}`;
+                    const response = await fetch(targetUrl);
+                    if (!response.ok) return;
+                    
+                    const data = await response.json();
+                    if (data?.response?.header?.resultCode !== "00") return;
+
+                    const rawItems = data?.response?.body?.items || [];
+                    const itemList = Array.isArray(rawItems) ? rawItems : [];
+                    
+                    localStorage.setItem('fids_flights_data', JSON.stringify(itemList));
+                    localStorage.setItem('fids_flights_timestamp', nowTimestamp.toString());
+
+                    setFlights(itemList);
+                } catch (err) {
+                    console.error(err);
+                    if (cachedData) setFlights(JSON.parse(cachedData));
+                }
+            };
+
+            useEffect(() => {
+                fetchFlightData(false);
+                const autoRefresh = setInterval(() => fetchFlightData(false), CACHE_DURATION);
+                return () => clearInterval(autoRefresh);
+            }, []);
+
+            // 4. 타임 스케줄 윈도우 정밀 필터링 로직 (+6시간 분 단위 리빌딩)
+            useEffect(() => {
+                const nowTimestamp = currentTime.getTime();
+                const threeHoursAgo = nowTimestamp - (3 * 60 * 60 * 1000); 
+                const sixHoursLater = nowTimestamp + (6 * 60 * 60 * 1000);  
+
+                const processed = flights.filter(flight => {
+                    const timeStr = String(flight.scheduleDatetime || '');
+                    if (timeStr.length < 12) return false;
+
+                    const year = parseInt(timeStr.slice(0, 4));
+                    const month = parseInt(timeStr.slice(4, 6)) - 1;
+                    const day = parseInt(timeStr.slice(6, 8));
+                    const hours = parseInt(timeStr.slice(8, 10));
+                    const minutes = parseInt(timeStr.slice(10, 12));
+                    
+                    const flightDate = new Date(year, month, day, hours, minutes);
+                    const flightTimestamp = flightDate.getTime();
+
+                    if (flightTimestamp >= nowTimestamp && flightTimestamp <= sixHoursLater) {
+                        return true;
+                    }
+
+                    if (flightTimestamp >= threeHoursAgo && flightTimestamp < nowTimestamp) {
+                        const remark = flight.remark ? String(flight.remark) : "";
+                        if (remark.includes("지연") || remark.includes("결항") || remark.includes("마감") || remark.includes("최종") || remark.includes("탑승중") || remark.includes("준비") || remark.includes("대기")) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+
+                processed.sort((a, b) => String(a.scheduleDatetime).localeCompare(String(b.scheduleDatetime)));
+
+                setFilteredFlights(prev => {
+                    if (JSON.stringify(prev) === JSON.stringify(processed)) return prev;
+                    setCurrentPage(0);
+                    return processed;
+                });
+            }, [currentTime.getMinutes(), flights]);
+
+            const pageData = filteredFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
+            const totalPages = Math.min(Math.ceil(filteredFlights.length / itemsPerPage), 10);
+
+            const formatTime = (timeStr) => {
+                if (!timeStr) return "--:--";
+                const cleanStr = String(timeStr);
+                if (cleanStr.length >= 12) {
+                    const timePart = cleanStr.slice(8, 12);
+                    return `${timePart.slice(0, 2)}:${timePart.slice(2, 4)}`;
+                }
+                return cleanStr;
+            };
+
+            const getPureTimeString = (dateObj) => {
+                const hh = String(dateObj.getHours()).padStart(2, '0');
+                const mm = String(dateObj.getMinutes()).padStart(2, '0');
+                const ss = String(dateObj.getSeconds()).padStart(2, '0');
+                return `${hh}:${mm}:${ss}`;
+            };
+
+            const parseFlightId = (id) => {
+                if (!id) return { code: "---", num: "" };
+                const match = id.match(/^([A-Za-z0-9]{2})(\d+.*)$/); 
+                if (match) {
+                    return { code: match[1].toUpperCase(), num: match[2] };
+                }
+                return { code: id.toUpperCase(), num: "" };
+            };
+
+            const getAirlineCode = (id) => {
+                if (!id) return "KE";
+                return id.slice(0, 2).toUpperCase();
+            };
+
+            const renderEstimatedTime = (flight) => {
+                const isDelayed = flight.remark && flight.remark.includes("지연");
+                if (!isDelayed) return ""; 
+                return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
+            };
+
+            const renderStatusAndStyle = (remark) => {
+                const status = remark || "정시";
+                let koText = "정시";
+                
+                if (status.includes("탑승중")) {
+                    return <div className="w-full h-full flex items-center justify-center py-5 text-white font-black animate-pulse">탑승중</div>;
+                } else if (status.includes("준비") || status.includes("대기")) {
+                    return <div className="w-full h-full flex items-center justify-center py-5 text-white font-black">탑승준비</div>;
+                } else if (status.includes("마감") || status.includes("최종")) {
+                    return <div className="w-full h-full flex items-center justify-center py-5 text-[#FFD700] font-black animate-pulse">마감예정</div>;
+                } else if (status.includes("지연")) {
+                    return (
+                        <div className="w-full h-full bg-[#FF6D00] flex items-center justify-center py-5 text-white font-black">
+                            지연
+                        </div>
+                    );
+                } else if (status.includes("결항")) {
+                    return (
+                        <div className="w-full h-full bg-[#D50000] flex items-center justify-center py-5 text-white font-black">
+                            결항
+                        </div>
+                    );
+                }
+
+                return <div className="w-full h-full flex items-center justify-center py-5 text-[#4AF2A1] font-black">정시</div>;
+            };
+
+            return (
+                <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none">
+                    <div>
+                        {/* 🟦 1번째 줄 */}
+                        <header className="relative flex items-center bg-[#458cff] px-6 py-5 min-h-[72px] shadow-md">
+                            <div className="absolute left-6 flex items-center">
+                                <svg className="w-9 h-9 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                                </svg>
+                            </div>
+
+                            <div className="w-full text-center">
+                                <span className="text-white text-xl md:text-2xl font-black tracking-wide font-sans">
+                                    출발 Departures
+                                </span>
+                            </div>
+                            
+                            <div className="absolute right-6 text-white font-mono text-xl md:text-2xl font-bold tracking-wider">
+                                {getPureTimeString(currentTime)}
+                            </div>
+                        </header>
+
+                        {/* 📊 2번째 줄 & 3번째 줄 이하 데이터 매트릭스 */}
+                        <div className="w-full">
+                            {/* ⬛ 2번째 줄 항목 바 */}
+                            <div className="grid grid-cols-8 gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-5 text-xl md:text-2xl font-black text-white uppercase tracking-wider text-center items-center">
+                                <div>예정</div>
+                                <div>변경</div>
+                                <div className="col-span-2 text-center">도착지</div>
+                                <div>편명</div>
+                                <div>체크인</div>
+                                <div>탑승구</div>
+                                <div>현황</div>
+                            </div>
+
+                            {/* 🟦 3번째 줄 이하 데이터 행 */}
+                            <div className="divide-y divide-[#162e58]/20 font-mono font-black text-xl md:text-2xl">
+                                {pageData.length > 0 ? (
+                                    pageData.map((flight, idx) => {
+                                        const rowBgColor = idx % 2 === 0 ? "bg-[#1a62d6]" : "bg-[#134dab]";
+                                        const fltInfo = parseFlightId(flight.flightId);
+                                        
+                                        return (
+                                            <div key={idx} className={`grid grid-cols-8 gap-2 px-6 text-center items-center transition-colors ${rowBgColor}`}>
+                                                
+                                                <div className="text-[#FFFFFF] font-black py-5">{formatTime(flight.scheduleDatetime)}</div>
+                                                
+                                                <div className="text-[#FACC15] font-black py-5">
+                                                    {renderEstimatedTime(flight)}
+                                                </div>
+                                                
+                                                <div className="text-left pl-14 font-sans font-black text-[#FFFFFF] truncate col-span-2 tracking-wide py-5">
+                                                    {flight.airport || "---"}
+                                                </div>
+                                                
+                                                <div className="flex items-center justify-center font-mono py-5">
+                                                    <div className="flex items-center w-[180px] text-left">
+                                                        <div className="w-8 shrink-0 flex items-center justify-start">
+                                                            <img 
+                                                                src={`https://images.kiwi.com/airlines/32/${getAirlineCode(flight.flightId)}.png`}
+                                                                alt=""
+                                                                onError={(e) => { e.target.style.display = 'none'; }} 
+                                                                className="w-7 h-7 object-contain rounded-sm"
+                                                            />
+                                                        </div>
+                                                        <span className="w-12 shrink-0 text-white text-center font-black">{fltInfo.code}</span>
+                                                        <span className="text-white font-black pl-2 truncate">{fltInfo.num}</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="text-[#FACC15] tracking-wide font-black py-5">{flight.chkinRange || "—"}</div>
+                                                
+                                                <div className="text-white font-black py-5">{flight.gateNumber || "—"}</div>
+                                                
+                                                <div className="font-sans font-black h-full w-full flex items-center justify-center">
+                                                    {renderStatusAndStyle(flight.remark)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center py-40 text-[#458cff] font-sans font-black text-xl tracking-widest uppercase bg-[#134dab]/20 col-span-8">
+                                        현재 시간대에 배정된 출발 항공편이 없습니다.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer className="mb-4 flex justify-between items-center text-[10px] font-bold text-[#1b3a6d] px-6">
+                        <button onClick={() => fetchFlightData(true)} className="hover:text-[#315ba1] focus:outline-none">
+                            [ FLIGHT DATA SYNC ]
+                        </button>
+                        {totalPages > 1 && (
+                            <div className="text-[#1a386b] font-mono tracking-widest text-xs font-black">
+                                PAGE {currentPage + 1} / {totalPages}
+                            </div>
+                        )}
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render((<App />));
+    </script>
+</body>
+</html>
