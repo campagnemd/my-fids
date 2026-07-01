@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
         
         body { 
             font-family: 'Pretendard', sans-serif; 
@@ -19,18 +19,6 @@
             font-family: 'Roboto Mono', 'Inter', monospace; 
         }
         ::-webkit-scrollbar { display: none; }
-
-        /* 📊 가로 폭 콤팩트 압축 격자선 최적화 레이아웃 스펙 커스텀 정의 */
-        .fids-grid-7 {
-            display: grid;
-            grid-template-columns: 100px 100px minmax(300px, 1fr) 240px 140px 180px;
-        }
-        @media (min-width: 1500px) {
-            .fids-grid-8 {
-                display: grid;
-                grid-template-columns: 100px 100px minmax(350px, 1fr) 240px 160px 140px 180px;
-            }
-        }
     </style>
 </head>
 <body class="text-white antialiased select-none">
@@ -228,6 +216,15 @@
                 return <div className="w-full h-full"></div>;
             };
 
+            const renderEstimatedTime = (flight) => {
+                const isDelayed = flight.remark && flight.remark.includes("지연");
+                if (!isDelayed) return ""; 
+                return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
+            };
+
+            // 🛠️ [안전 보완] 검은 화면을 방지하기 위해 CSS 연산을 버리고 Tailwind 인라인 가로폭 정의로 전격 교체
+            const gridLayoutClass = "grid grid-cols-[100px_100px_minmax(250px,1fr)_240px_140px_180px] min-[1500px]:grid-cols-[100px_100px_minmax(300px,1fr)_240px_160px_140px_180px]";
+
             return (
                 <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none">
                     <div>
@@ -252,8 +249,8 @@
 
                         {/* 📊 2번째 줄 & 3번째 줄 이하 데이터 매트릭스 */}
                         <div className="w-full">
-                            {/* ⬛ 2번째 줄 항목 바: [수정 반영] 예정/변경 고정축소 레이아웃 구조체 클래스 바인딩 및 우측 주요 항목 text-center 지정 */}
-                            <div className="fids-grid-7 min-[1500px]:fids-grid-8 gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-[10px] text-2xl md:text-3xl font-black text-white uppercase tracking-wider text-center items-center">
+                            {/* ⬛ 2번째 줄 항목 바 */}
+                            <div className={`${gridLayoutClass} gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-[10px] text-2xl md:text-3xl font-black text-white uppercase tracking-wider text-center items-center`}>
                                 <div>예정</div>
                                 <div>변경</div>
                                 <div className="text-center">도착지</div>
@@ -271,12 +268,12 @@
                                         const fltInfo = parseFlightId(flight.flightId);
                                         
                                         return (
-                                            <div key={idx} className={`fids-grid-7 min-[1500px]:fids-grid-8 gap-2 pl-6 text-center items-center transition-colors ${rowBgColor}`}>
+                                            <div key={idx} className={`${gridLayoutClass} gap-2 pl-6 text-center items-center transition-colors ${rowBgColor}`}>
                                                 
-                                                {/* 1. 예정시간 (너비 축소 정렬) */}
+                                                {/* 1. 예정시간 */}
                                                 <div className="text-[#FFFFFF] font-black py-[10px] text-center">{formatTime(flight.scheduleDatetime)}</div>
                                                 
-                                                {/* 2. 변경시간 (너비 축소 정렬) */}
+                                                {/* 2. 변경시간 */}
                                                 <div className="text-[#FACC15] font-black py-[10px] text-center">
                                                     {renderEstimatedTime(flight)}
                                                 </div>
@@ -302,12 +299,12 @@
                                                     </div>
                                                 </div>
                                                 
-                                                {/* 5. 체크인 카운터 (가운데 정렬 고정 완료) */}
+                                                {/* 5. 체크인 카운터 */}
                                                 <div className="hidden min-[1500px]:block text-[#FACC15] tracking-wide font-black py-[10px] text-center">
                                                     {flight.chkinRange || "—"}
                                                 </div>
                                                 
-                                                {/* 6. 탑승구 (가운데 정렬 고정 완료) */}
+                                                {/* 6. 탑승구 */}
                                                 <div className="text-white font-black py-[10px] text-center">{flight.gateNumber || "—"}</div>
                                                 
                                                 {/* 7. 현황 */}
@@ -318,7 +315,7 @@
                                         );
                                     })
                                 ) : (
-                                    <div className="text-center py-40 text-[#458cff] font-sans font-black text-2xl tracking-widest uppercase bg-[#134dab]/20 col-span-7 min-[1500px]:col-span-8">
+                                    <div className="text-center py-40 text-[#458cff] font-sans font-black text-2xl tracking-widest uppercase bg-[#134dab]/20 col-span-6 min-[1500px]:col-span-7">
                                         현재 시간대에 배정된 출발 항공편이 없습니다.
                                     </div>
                                 )}
