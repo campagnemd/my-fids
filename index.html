@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght=700;900&family=Roboto+Mono:wght=700&display=swap');
         
         body { 
             font-family: 'Pretendard', sans-serif; 
@@ -200,6 +200,7 @@
                 } else if (status.includes("마감") || status.includes("최종")) {
                     return <div className="w-full h-full flex items-center justify-center text-[#FFD700] font-black animate-pulse text-center">마감예정</div>;
                 } else if (status.includes("지연")) {
+                    // 오른쪽 끝까지 100% 꽉 차게 하기 위해 여백 분리 연산 유지
                     return (
                         <div className="w-full h-full bg-[#FF6D00] flex items-center justify-center text-white font-black text-center mr-[-24px] pr-[24px]">
                             지연
@@ -222,7 +223,7 @@
                 return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
             };
 
-            // 🛠️ [안전 보완] 검은 화면을 방지하기 위해 CSS 연산을 버리고 Tailwind 인라인 가로폭 정의로 전격 교체
+            // 🛠️ 7열/8열 수치 정의 그리드 스타일 구조체 유지
             const gridLayoutClass = "grid grid-cols-[100px_100px_minmax(250px,1fr)_240px_140px_180px] min-[1500px]:grid-cols-[100px_100px_minmax(300px,1fr)_240px_160px_140px_180px]";
 
             return (
@@ -249,7 +250,7 @@
 
                         {/* 📊 2번째 줄 & 3번째 줄 이하 데이터 매트릭스 */}
                         <div className="w-full">
-                            {/* ⬛ 2번째 줄 항목 바 */}
+                            {/* ⬛ 2번째 줄 항목 바 (오른쪽 패딩을 px-6 고정하여 데이터 라인과 수직 일치화) */}
                             <div className={`${gridLayoutClass} gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-[10px] text-2xl md:text-3xl font-black text-white uppercase tracking-wider text-center items-center`}>
                                 <div>예정</div>
                                 <div>변경</div>
@@ -260,7 +261,7 @@
                                 <div className="text-center">현황</div>
                             </div>
 
-                            {/* 🟦 3번째 줄 이하 데이터 행 */}
+                            {/* 🟦 3번째 줄 이하 데이터 행 (패딩 구조를 헤더 바와 완전 1:1 대칭 매칭) */}
                             <div className="divide-y divide-[#162e58]/20 font-mono font-black text-2xl md:text-3xl">
                                 {pageData.length > 0 ? (
                                     pageData.map((flight, idx) => {
@@ -268,7 +269,7 @@
                                         const fltInfo = parseFlightId(flight.flightId);
                                         
                                         return (
-                                            <div key={idx} className={`${gridLayoutClass} gap-2 pl-6 text-center items-center transition-colors ${rowBgColor}`}>
+                                            <div key={idx} className={`${gridLayoutClass} gap-2 px-6 text-center items-center transition-colors ${rowBgColor}`}>
                                                 
                                                 {/* 1. 예정시간 */}
                                                 <div className="text-[#FFFFFF] font-black py-[10px] text-center">{formatTime(flight.scheduleDatetime)}</div>
@@ -323,13 +324,13 @@
                         </div>
                     </div>
 
-                    {/* 하단 푸터 바 */}
-                    <footer className="mb-4 flex justify-between items-center text-[11px] font-bold text-[#1b3a6d] px-6">
-                        <button onClick={() => fetchFlightData(true)} className="hover:text-[#315ba1] focus:outline-none">
+                    {/* 🟨 하단 푸터 바: [수정 반영] 페이지 표시 화이트 스케일 업 및 매칭 완결 */}
+                    <footer className="mb-4 flex justify-between items-center px-6">
+                        <button onClick={() => fetchFlightData(true)} className="text-[11px] font-bold text-[#1b3a6d] hover:text-[#315ba1] focus:outline-none">
                             [ FLIGHT DATA SYNC ]
                         </button>
                         {totalPages > 1 && (
-                            <div className="text-[#1a386b] font-mono tracking-widest text-sm font-black">
+                            <div className="text-white font-mono font-black text-2xl md:text-3xl tracking-widest">
                                 PAGE {currentPage + 1} / {totalPages}
                             </div>
                         )}
