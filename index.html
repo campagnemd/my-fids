@@ -36,6 +36,10 @@
             const [flights, setFlights] = useState([]);
             const [filteredFlights, setFilteredFlights] = useState([]);
             const [currentPage, setCurrentPage] = useState(0);
+            
+            // 🛠️ [신규 기능] 코드쉐어 표시 토글 상태 (기본값: 끄기/false)
+            const [showCodeshare, setShowCodeshare] = useState(false);
+            
             const itemsPerPage = 11; 
 
             const filteredFlightsRef = useRef([]);
@@ -69,7 +73,6 @@
                 return `${year}${month}${day}`;
             };
 
-            // 🛠️ [안전 1] 개별 날짜 패치 로직: 빈 배열이면 캐시하지 않고 과감히 파기
             const fetchSingleDayData = async (dateStr, forceRefresh) => {
                 const cacheKey = `fids_raw_data_${dateStr}`;
                 const cachedTimeKey = `fids_raw_time_${dateStr}`;
@@ -120,7 +123,6 @@
                 }
             };
 
-            // 🛠️ [안전 2] 순차적 병합: Promise.all을 버리고 하나씩 가져와 서버 디도스 차단 회피
             const fetchFlightData = async (forceRefresh = false) => {
                 const now = new Date();
                 const currentHour = now.getHours();
@@ -138,7 +140,6 @@
 
                 try {
                     const datasets = [];
-                    // 여기서 앞 날짜 통신이 완전히 끝난 뒤에 다음 날짜를 통신합니다.
                     for (const date of targetDates) {
                         const data = await fetchSingleDayData(date, forceRefresh);
                         datasets.push(data);
@@ -146,21 +147,40 @@
                     
                     const mergedItems = [];
                     const seenKeys = new Set();
+                    const seenSchedules = new Set(); // 🛠️ 코드쉐어 식별용 지문 기록 저장소
                     
                     if (datasets && Array.isArray(datasets)) {
                         datasets.flat().forEach(item => {
-                            // 대소문자 호환성 무적 처리
                             const sched = item.scheduleDatetime || item.scheduleDateTime;
                             if (!item || !item.flightId || !sched) return;
+                            
                             const uniqueKey = `${item.flightId}_${sched}`;
                             if (!seenKeys.has(uniqueKey)) {
                                 seenKeys.add(uniqueKey);
+                                
+                                // 🛠️ [스마트 식별 엔진] 동일 시간대/동일 게이트/동일 목적지 코드쉐어 잡아내기
+                                let isSlave = false;
+                                if (item.codeshare === 'Y' || item.codeshare === 'True') isSlave = true;
+                                if (item.masterflightid && item.masterflightid !== item.flightId) isSlave = true;
+                                
+                                if (!isSlave) {
+                                    const est = item.estimatedDatetime || item.estimatedDateTime || "";
+                                    const fingerprint = `${sched}_${item.airport}_${est}_${item.gateNumber || 'nogate'}`;
+                                    
+                                    if (seenSchedules.has(fingerprint)) {
+                                        isSlave = true; // 이미 선행 편명이 있다면 얘는 코드쉐어(중복)로 판별
+                                    } else {
+                                        seenSchedules.add(fingerprint);
+                                    }
+                                }
+                                // 판별된 결과를 객체에 꼬리표로 부착
+                                item.isCodeshare = isSlave;
+                                
                                 mergedItems.push(item);
                             }
                         });
                     }
 
-                    // 🛠️ [안전 3] 빈 데이터로 전광판 화면을 지워버리는 붕괴 현상 최종 차단
                     if (mergedItems.length > 0) {
                         setFlights(mergedItems);
                     }
@@ -173,9 +193,9 @@
                 fetchFlightData(false);
                 const autoRefresh = setInterval(() => fetchFlightData(false), CACHE_DURATION);
                 return () => clearInterval(autoRefresh);
-            }, []); // 빈 배열을 넣어 불필요한 중복 호출 억제
+            }, []); 
 
-            // 4. 과거 6시간 전부터 미래 6시간 후까지 정밀 타임 윈도우 스캔 필터링
+            // 4. 필터링 로직 (코드쉐어 ON/OFF 스위치 작동 반영)
             useEffect(() => {
                 if (!flights || flights.length === 0) return;
 
@@ -184,6 +204,9 @@
                 const sixHoursLater = nowTimestamp + (6 * 60 * 60 * 1000);  
 
                 const processed = flights.filter(flight => {
+                    // 🛠️ [신규 필터] 스위치가 꺼져있고(false), 해당 비행편이 코드쉐어라면 화면에서 제외
+                    if (!showCodeshare && flight.isCodeshare) return false;
+
                     const sched = String(flight.scheduleDatetime || flight.scheduleDateTime || '');
                     if (sched.length < 12) return false;
 
@@ -218,10 +241,11 @@
 
                 setFilteredFlights(prev => {
                     if (JSON.stringify(prev) === JSON.stringify(processed)) return prev;
-                    setCurrentPage(0);
+                    setCurrentPage(0); // 데이터가 갱신되면 1페이지로 깔끔하게 리셋
                     return processed;
                 });
-            }, [currentTime.getMinutes(), flights]);
+            // 🛠️ showCodeshare 토글 상태가 바뀔 때마다 필터 재계산 발동
+            }, [currentTime.getMinutes(), flights, showCodeshare]); 
 
             const pageData = filteredFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
             const totalPages = Math.min(Math.ceil(filteredFlights.length / itemsPerPage), 10);
@@ -384,11 +408,31 @@
                         </div>
                     </div>
 
-                    {/* 하단 푸터 바 */}
+                    {/* 🎛️ 하단 푸터 바: 조작 패널 영역 */}
                     <footer className="mb-4 flex justify-between items-center px-6">
-                        <button onClick={() => fetchFlightData(true)} className="text-[11px] font-bold text-[#1b3a6d] hover:text-[#315ba1] focus:outline-none">
-                            [ FLIGHT DATA SYNC ]
-                        </button>
+                        <div className="flex items-center">
+                            <button onClick={() => fetchFlightData(true)} className="text-[11px] font-bold text-[#1b3a6d] hover:text-[#315ba1] focus:outline-none">
+                                [ FLIGHT DATA SYNC ]
+                            </button>
+                            
+                            {/* 🛠️ [신규 기능] 코드쉐어 ON/OFF 토글 스위치 컴포넌트 */}
+                            <label className="flex items-center cursor-pointer ml-8 group">
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only" 
+                                        checked={showCodeshare}
+                                        onChange={() => setShowCodeshare(!showCodeshare)}
+                                    />
+                                    <div className={`block w-9 h-5 rounded-full transition-colors ${showCodeshare ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                    <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showCodeshare ? 'transform translate-x-4' : ''}`}></div>
+                                </div>
+                                <div className={`ml-3 font-mono font-bold text-[11px] tracking-wider transition-colors ${showCodeshare ? 'text-[#4AF2A1]' : 'text-[#1b3a6d] group-hover:text-[#315ba1]'}`}>
+                                    CODESHARE
+                                </div>
+                            </label>
+                        </div>
+                        
                         {totalPages > 1 && (
                             <div className="text-white font-mono font-black text-2xl md:text-3xl tracking-widest">
                                 PAGE {currentPage + 1} / {totalPages}
