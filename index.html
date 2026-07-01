@@ -29,7 +29,6 @@
         const { useState, useEffect, useRef } = React;
 
         const SERVICE_KEY = "ca528dec987f974b71365a40543ca4c094fa0a3afe15441db4136e49edc7c72c";
-        // 🛑 외부 프록시 제거: Vercel 내장 Rewrites 터널을 이용합니다.
         const CACHE_DURATION = 10 * 60 * 1000; 
 
         function App() {
@@ -93,7 +92,6 @@
                         passengerOrCargo: 'P'     
                     });
 
-                    // 🛠️ Vercel Rewrites 용 백엔드 프록시 경로로 주소 전면 전격 교체
                     const targetUrl = `/api/icn/B551177/statusOfAllFltDeOdp/getFltDeparturesDeOdp?${params.toString()}`;
                     const response = await fetch(targetUrl);
                     if (!response.ok) return;
@@ -120,7 +118,7 @@
                 return () => clearInterval(autoRefresh);
             }, []);
 
-            // 4. 타임 스케줄 윈도우 정밀 필터링 로직 (+6시간 분 단위 리빌딩)
+            // 4. 타임 스케줄 윈도우 정밀 필터링 로직 (-3시간 ~ +6시간)
             useEffect(() => {
                 const nowTimestamp = currentTime.getTime();
                 const threeHoursAgo = nowTimestamp - (3 * 60 * 60 * 1000); 
@@ -202,31 +200,32 @@
                 return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
             };
 
+            // [수정 핵심] "정시" 상태 빈칸 및 상하 여백 10px 고정 제어기
             const renderStatusAndStyle = (remark) => {
                 const status = remark || "정시";
-                let koText = "정시";
                 
                 if (status.includes("탑승중")) {
-                    return <div className="w-full h-full flex items-center justify-center py-5 text-white font-black animate-pulse">탑승중</div>;
+                    return <div className="w-full h-full flex items-center justify-center py-[10px] text-white font-black animate-pulse">탑승중</div>;
                 } else if (status.includes("준비") || status.includes("대기")) {
-                    return <div className="w-full h-full flex items-center justify-center py-5 text-white font-black">탑승준비</div>;
+                    return <div className="w-full h-full flex items-center justify-center py-[10px] text-white font-black">탑승준비</div>;
                 } else if (status.includes("마감") || status.includes("최종")) {
-                    return <div className="w-full h-full flex items-center justify-center py-5 text-[#FFD700] font-black animate-pulse">마감예정</div>;
+                    return <div className="w-full h-full flex items-center justify-center py-[10px] text-[#FFD700] font-black animate-pulse">마감예정</div>;
                 } else if (status.includes("지연")) {
                     return (
-                        <div className="w-full h-full bg-[#FF6D00] flex items-center justify-center py-5 text-white font-black">
+                        <div className="w-full h-full bg-[#FF6D00] flex items-center justify-center py-[10px] text-white font-black">
                             지연
                         </div>
                     );
                 } else if (status.includes("결항")) {
                     return (
-                        <div className="w-full h-full bg-[#D50000] flex items-center justify-center py-5 text-white font-black">
+                        <div className="w-full h-full bg-[#D50000] flex items-center justify-center py-[10px] text-white font-black">
                             결항
                         </div>
                     );
                 }
 
-                return <div className="w-full h-full flex items-center justify-center py-5 text-[#4AF2A1] font-black">정시</div>;
+                // "정시"인 경우 아예 빈칸(Empty div)으로 처리
+                return <div className="w-full h-full py-[10px]"></div>;
             };
 
             return (
@@ -235,18 +234,18 @@
                         {/* 🟦 1번째 줄 */}
                         <header className="relative flex items-center bg-[#458cff] px-6 py-5 min-h-[72px] shadow-md">
                             <div className="absolute left-6 flex items-center">
-                                <svg className="w-9 h-9 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
                                 </svg>
                             </div>
 
                             <div className="w-full text-center">
-                                <span className="text-white text-xl md:text-2xl font-black tracking-wide font-sans">
+                                <span className="text-white text-2xl md:text-3xl font-black tracking-wide font-sans">
                                     출발 Departures
                                 </span>
                             </div>
                             
-                            <div className="absolute right-6 text-white font-mono text-xl md:text-2xl font-bold tracking-wider">
+                            <div className="absolute right-6 text-white font-mono text-2xl md:text-3xl font-bold tracking-wider">
                                 {getPureTimeString(currentTime)}
                             </div>
                         </header>
@@ -254,7 +253,7 @@
                         {/* 📊 2번째 줄 & 3번째 줄 이하 데이터 매트릭스 */}
                         <div className="w-full">
                             {/* ⬛ 2번째 줄 항목 바 */}
-                            <div className="grid grid-cols-8 gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-5 text-xl md:text-2xl font-black text-white uppercase tracking-wider text-center items-center">
+                            <div className="grid grid-cols-8 gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-[10px] text-2xl md:text-3xl font-black text-white uppercase tracking-wider text-center items-center">
                                 <div>예정</div>
                                 <div>변경</div>
                                 <div className="col-span-2 text-center">도착지</div>
@@ -264,8 +263,8 @@
                                 <div>현황</div>
                             </div>
 
-                            {/* 🟦 3번째 줄 이하 데이터 행 */}
-                            <div className="divide-y divide-[#162e58]/20 font-mono font-black text-xl md:text-2xl">
+                            {/* 🟦 3번째 줄 이하 데이터 행: 폰트 스케일을 text-2xl md:text-3xl로 전격 상향 조정 */}
+                            <div className="divide-y divide-[#162e58]/20 font-mono font-black text-2xl md:text-3xl">
                                 {pageData.length > 0 ? (
                                     pageData.map((flight, idx) => {
                                         const rowBgColor = idx % 2 === 0 ? "bg-[#1a62d6]" : "bg-[#134dab]";
@@ -274,35 +273,42 @@
                                         return (
                                             <div key={idx} className={`grid grid-cols-8 gap-2 px-6 text-center items-center transition-colors ${rowBgColor}`}>
                                                 
-                                                <div className="text-[#FFFFFF] font-black py-5">{formatTime(flight.scheduleDatetime)}</div>
+                                                {/* 1. 예정시간 */}
+                                                <div className="text-[#FFFFFF] font-black py-[10px]">{formatTime(flight.scheduleDatetime)}</div>
                                                 
-                                                <div className="text-[#FACC15] font-black py-5">
+                                                {/* 2. 변경시간 */}
+                                                <div className="text-[#FACC15] font-black py-[10px]">
                                                     {renderEstimatedTime(flight)}
                                                 </div>
                                                 
-                                                <div className="text-left pl-14 font-sans font-black text-[#FFFFFF] truncate col-span-2 tracking-wide py-5">
+                                                {/* 3. 도착지 */}
+                                                <div className="text-left pl-14 font-sans font-black text-[#FFFFFF] truncate col-span-2 tracking-wide py-[10px]">
                                                     {flight.airport || "---"}
                                                 </div>
                                                 
-                                                <div className="flex items-center justify-center font-mono py-5">
-                                                    <div className="flex items-center w-[180px] text-left">
-                                                        <div className="w-8 shrink-0 flex items-center justify-start">
+                                                {/* 4. 편명 컴포넌트: 로고 크기를 w-10 h-10으로 스케일업 */}
+                                                <div className="flex items-center justify-center font-mono py-[10px]">
+                                                    <div className="flex items-center w-[220px] text-left">
+                                                        <div className="w-12 shrink-0 flex items-center justify-start">
                                                             <img 
-                                                                src={`https://images.kiwi.com/airlines/32/${getAirlineCode(flight.flightId)}.png`}
+                                                                src={`https://images.kiwi.com/airlines/64/${getAirlineCode(flight.flightId)}.png`}
                                                                 alt=""
                                                                 onError={(e) => { e.target.style.display = 'none'; }} 
-                                                                className="w-7 h-7 object-contain rounded-sm"
+                                                                className="w-10 h-10 object-contain rounded-sm"
                                                             />
                                                         </div>
-                                                        <span className="w-12 shrink-0 text-white text-center font-black">{fltInfo.code}</span>
-                                                        <span className="text-white font-black pl-2 truncate">{fltInfo.num}</span>
+                                                        <span className="w-16 shrink-0 text-white text-center font-black">{fltInfo.code}</span>
+                                                        <span className="text-white font-black pl-3 truncate">{fltInfo.num}</span>
                                                     </div>
                                                 </div>
                                                 
-                                                <div className="text-[#FACC15] tracking-wide font-black py-5">{flight.chkinRange || "—"}</div>
+                                                {/* 5. 체크인 카운터 */}
+                                                <div className="text-[#FACC15] tracking-wide font-black py-[10px]">{flight.chkinRange || "—"}</div>
                                                 
-                                                <div className="text-white font-black py-5">{flight.gateNumber || "—"}</div>
+                                                {/* 6. 탑승구 */}
+                                                <div className="text-white font-black py-[10px]">{flight.gateNumber || "—"}</div>
                                                 
+                                                {/* 7. 현황 */}
                                                 <div className="font-sans font-black h-full w-full flex items-center justify-center">
                                                     {renderStatusAndStyle(flight.remark)}
                                                 </div>
@@ -310,7 +316,7 @@
                                         );
                                     })
                                 ) : (
-                                    <div className="text-center py-40 text-[#458cff] font-sans font-black text-xl tracking-widest uppercase bg-[#134dab]/20 col-span-8">
+                                    <div className="text-center py-40 text-[#458cff] font-sans font-black text-2xl tracking-widest uppercase bg-[#134dab]/20 col-span-8">
                                         현재 시간대에 배정된 출발 항공편이 없습니다.
                                     </div>
                                 )}
@@ -318,12 +324,13 @@
                         </div>
                     </div>
 
-                    <footer className="mb-4 flex justify-between items-center text-[10px] font-bold text-[#1b3a6d] px-6">
+                    {/* 하단 푸터 바 */}
+                    <footer className="mb-4 flex justify-between items-center text-[11px] font-bold text-[#1b3a6d] px-6">
                         <button onClick={() => fetchFlightData(true)} className="hover:text-[#315ba1] focus:outline-none">
                             [ FLIGHT DATA SYNC ]
                         </button>
                         {totalPages > 1 && (
-                            <div className="text-[#1a386b] font-mono tracking-widest text-xs font-black">
+                            <div className="text-[#1a386b] font-mono tracking-widest text-sm font-black">
                                 PAGE {currentPage + 1} / {totalPages}
                             </div>
                         )}
