@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght=700;900&family=Roboto+Mono:wght=700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
         
         body { 
             font-family: 'Pretendard', sans-serif; 
@@ -69,6 +69,7 @@
                 return `${year}${month}${day}`;
             };
 
+            // 🛠️ [안전 1] 개별 날짜 패치 로직: 빈 배열이면 캐시하지 않고 과감히 파기
             const fetchSingleDayData = async (dateStr, forceRefresh) => {
                 const cacheKey = `fids_raw_data_${dateStr}`;
                 const cachedTimeKey = `fids_raw_time_${dateStr}`;
@@ -78,17 +79,16 @@
 
                 if (!forceRefresh && cachedData && cachedTime && (nowTimestamp - cachedTime < CACHE_DURATION)) {
                     try {
-                        return JSON.parse(cachedData) || [];
-                    } catch(e) {
-                        return [];
-                    }
+                        const parsed = JSON.parse(cachedData);
+                        if (parsed && parsed.length > 0) return parsed;
+                    } catch(e) {}
                 }
 
                 try {
                     const params = new URLSearchParams({
                         serviceKey: SERVICE_KEY,
                         type: 'json',
-                        numOfRows: '1000', 
+                        numOfRows: '1500', 
                         pageNo: '1',
                         searchDate: dateStr,     
                         searchdtCode: 'S',        
@@ -96,27 +96,31 @@
                     });
                     const targetUrl = `/api/icn/B551177/statusOfAllFltDeOdp/getFltDeparturesDeOdp?${params.toString()}`;
                     const response = await fetch(targetUrl);
-                    if (!response.ok) return cachedData ? JSON.parse(cachedData) : [];
+                    if (!response.ok) throw new Error("API Network Error");
                     
                     const data = await response.json();
-                    if (data?.response?.header?.resultCode !== "00") return cachedData ? JSON.parse(cachedData) : [];
+                    if (data?.response?.header?.resultCode !== "00") throw new Error("API Data Error");
                     
                     const rawItems = data?.response?.body?.items || [];
                     const itemList = Array.isArray(rawItems) ? rawItems : [];
                     
-                    localStorage.setItem(cacheKey, JSON.stringify(itemList));
-                    localStorage.setItem(cachedTimeKey, nowTimestamp.toString());
-                    return itemList;
-                } catch (err) {
-                    console.error(err);
-                    try {
-                        return cachedData ? JSON.parse(cachedData) : [];
-                    } catch(e) {
-                        return [];
+                    if (itemList.length > 0) {
+                        localStorage.setItem(cacheKey, JSON.stringify(itemList));
+                        localStorage.setItem(cachedTimeKey, nowTimestamp.toString());
+                        return itemList;
                     }
+                    return [];
+                } catch (err) {
+                    console.error(`데이터 호출 실패 (${dateStr}):`, err);
+                    try {
+                        const backup = JSON.parse(cachedData);
+                        if (backup && backup.length > 0) return backup;
+                    } catch(e) {}
+                    return [];
                 }
             };
 
+            // 🛠️ [안전 2] 순차적 병합: Promise.all을 버리고 하나씩 가져와 서버 디도스 차단 회피
             const fetchFlightData = async (forceRefresh = false) => {
                 const now = new Date();
                 const currentHour = now.getHours();
@@ -133,17 +137,22 @@
                 }
 
                 try {
-                    const dataPromises = targetDates.map(date => fetchSingleDayData(date, forceRefresh));
-                    const datasets = await Promise.all(dataPromises);
+                    const datasets = [];
+                    // 여기서 앞 날짜 통신이 완전히 끝난 뒤에 다음 날짜를 통신합니다.
+                    for (const date of targetDates) {
+                        const data = await fetchSingleDayData(date, forceRefresh);
+                        datasets.push(data);
+                    }
                     
                     const mergedItems = [];
                     const seenKeys = new Set();
                     
-                    // 🛠️ [검은 화면 해결 핵심] datasets가 유효한 배열인지 검증 후 융합 진행
                     if (datasets && Array.isArray(datasets)) {
                         datasets.flat().forEach(item => {
-                            if (!item || !item.flightId || !item.scheduleDatetime) return;
-                            const uniqueKey = `${item.flightId}_${item.scheduleDatetime}`;
+                            // 대소문자 호환성 무적 처리
+                            const sched = item.scheduleDatetime || item.scheduleDateTime;
+                            if (!item || !item.flightId || !sched) return;
+                            const uniqueKey = `${item.flightId}_${sched}`;
                             if (!seenKeys.has(uniqueKey)) {
                                 seenKeys.add(uniqueKey);
                                 mergedItems.push(item);
@@ -151,9 +160,12 @@
                         });
                     }
 
-                    setFlights(mergedItems);
+                    // 🛠️ [안전 3] 빈 데이터로 전광판 화면을 지워버리는 붕괴 현상 최종 차단
+                    if (mergedItems.length > 0) {
+                        setFlights(mergedItems);
+                    }
                 } catch (err) {
-                    console.error("데이터 병합 실패:", err);
+                    console.error("데이터 병합 코어 에러:", err);
                 }
             };
 
@@ -161,8 +173,9 @@
                 fetchFlightData(false);
                 const autoRefresh = setInterval(() => fetchFlightData(false), CACHE_DURATION);
                 return () => clearInterval(autoRefresh);
-            }, [currentTime.getHours()]); 
+            }, []); // 빈 배열을 넣어 불필요한 중복 호출 억제
 
+            // 4. 과거 6시간 전부터 미래 6시간 후까지 정밀 타임 윈도우 스캔 필터링
             useEffect(() => {
                 if (!flights || flights.length === 0) return;
 
@@ -171,14 +184,14 @@
                 const sixHoursLater = nowTimestamp + (6 * 60 * 60 * 1000);  
 
                 const processed = flights.filter(flight => {
-                    const timeStr = String(flight.scheduleDatetime || '');
-                    if (timeStr.length < 12) return false;
+                    const sched = String(flight.scheduleDatetime || flight.scheduleDateTime || '');
+                    if (sched.length < 12) return false;
 
-                    const year = parseInt(timeStr.slice(0, 4));
-                    const month = parseInt(timeStr.slice(4, 6)) - 1;
-                    const day = parseInt(timeStr.slice(6, 8));
-                    const hours = parseInt(timeStr.slice(8, 10));
-                    const minutes = parseInt(timeStr.slice(10, 12));
+                    const year = parseInt(sched.slice(0, 4));
+                    const month = parseInt(sched.slice(4, 6)) - 1;
+                    const day = parseInt(sched.slice(6, 8));
+                    const hours = parseInt(sched.slice(8, 10));
+                    const minutes = parseInt(sched.slice(10, 12));
                     
                     const flightDate = new Date(year, month, day, hours, minutes);
                     const flightTimestamp = flightDate.getTime();
@@ -197,7 +210,11 @@
                     return false;
                 });
 
-                processed.sort((a, b) => String(a.scheduleDatetime).localeCompare(String(b.scheduleDatetime)));
+                processed.sort((a, b) => {
+                    const schedA = String(a.scheduleDatetime || a.scheduleDateTime || '');
+                    const schedB = String(b.scheduleDatetime || b.scheduleDateTime || '');
+                    return schedA.localeCompare(schedB);
+                });
 
                 setFilteredFlights(prev => {
                     if (JSON.stringify(prev) === JSON.stringify(processed)) return prev;
@@ -269,7 +286,8 @@
             const renderEstimatedTime = (flight) => {
                 const isDelayed = flight.remark && flight.remark.includes("지연");
                 if (!isDelayed) return ""; 
-                return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
+                const est = flight.estimatedDatetime || flight.estimatedDateTime || flight.scheduleDatetime || flight.scheduleDateTime;
+                return formatTime(est);
             };
 
             const gridLayoutClass = "grid grid-cols-[100px_100px_minmax(250px,1fr)_240px_140px_180px] min-[1500px]:grid-cols-[100px_100px_minmax(300px,1fr)_240px_160px_140px_180px]";
@@ -315,11 +333,12 @@
                                     pageData.map((flight, idx) => {
                                         const rowBgColor = idx % 2 === 0 ? "bg-[#1a62d6]" : "bg-[#134dab]";
                                         const fltInfo = parseFlightId(flight.flightId);
+                                        const schedTime = formatTime(flight.scheduleDatetime || flight.scheduleDateTime);
                                         
                                         return (
                                             <div key={idx} className={`${gridLayoutClass} gap-2 px-6 text-center items-center transition-colors ${rowBgColor}`}>
                                                 
-                                                <div className="text-[#FFFFFF] font-black py-[10px] text-center">{formatTime(flight.scheduleDatetime)}</div>
+                                                <div className="text-[#FFFFFF] font-black py-[10px] text-center">{schedTime}</div>
                                                 
                                                 <div className="text-[#FACC15] font-black py-[10px] text-center">
                                                     {renderEstimatedTime(flight)}
@@ -358,7 +377,7 @@
                                     })
                                 ) : (
                                     <div className="text-center py-40 text-[#458cff] font-sans font-black text-2xl tracking-widest uppercase bg-[#134dab]/20 col-span-6 min-[1500px]:col-span-7">
-                                        항공편을 가져오는 중이거나 현재 노출 조건에 맞는 일정이 없습니다.
+                                        실시간 비행 데이터를 불러오는 중입니다...
                                     </div>
                                 )}
                             </div>
