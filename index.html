@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght=700;900&family=Roboto+Mono:wght=700&display=swap');
         
         body { 
             font-family: 'Pretendard', sans-serif; 
@@ -69,7 +69,6 @@
                 return `${year}${month}${day}`;
             };
 
-            // [단일 데이터 패치] 개별 날짜별로 캐시를 완벽히 분리 제어합니다.
             const fetchSingleDayData = async (dateStr, forceRefresh) => {
                 const cacheKey = `fids_raw_data_${dateStr}`;
                 const cachedTimeKey = `fids_raw_time_${dateStr}`;
@@ -78,7 +77,11 @@
                 const nowTimestamp = Date.now();
 
                 if (!forceRefresh && cachedData && cachedTime && (nowTimestamp - cachedTime < CACHE_DURATION)) {
-                    return JSON.parse(cachedData);
+                    try {
+                        return JSON.parse(cachedData) || [];
+                    } catch(e) {
+                        return [];
+                    }
                 }
 
                 try {
@@ -106,11 +109,14 @@
                     return itemList;
                 } catch (err) {
                     console.error(err);
-                    return cachedData ? JSON.parse(cachedData) : [];
+                    try {
+                        return cachedData ? JSON.parse(cachedData) : [];
+                    } catch(e) {
+                        return [];
+                    }
                 }
             };
 
-            // 🛠️ [버그 수정 핵심] 데이터 소실 없는 완벽한 멀티 데이트 병합 엔진
             const fetchFlightData = async (forceRefresh = false) => {
                 const now = new Date();
                 const currentHour = now.getHours();
@@ -127,22 +133,23 @@
                 }
 
                 try {
-                    // 각 날짜별 데이터를 순차/독립적으로 가져옵니다. (덮어쓰기 현상 완전 방지)
                     const dataPromises = targetDates.map(date => fetchSingleDayData(date, forceRefresh));
                     const datasets = await Promise.all(dataPromises);
                     
-                    // 오늘 데이터와 경계선 데이터를 하나의 거대한 배열로 유실 없이 융합
                     const mergedItems = [];
                     const seenKeys = new Set();
                     
-                    datasets.flat().forEach(item => {
-                        if (!item || !item.flightId || !item.scheduleDatetime) return;
-                        const uniqueKey = `${item.flightId}_${item.scheduleDatetime}`;
-                        if (!seenKeys.has(uniqueKey)) {
-                            seenKeys.add(uniqueKey);
-                            mergedItems.push(item);
-                        }
-                    });
+                    // 🛠️ [검은 화면 해결 핵심] datasets가 유효한 배열인지 검증 후 융합 진행
+                    if (datasets && Array.isArray(datasets)) {
+                        datasets.flat().forEach(item => {
+                            if (!item || !item.flightId || !item.scheduleDatetime) return;
+                            const uniqueKey = `${item.flightId}_${item.scheduleDatetime}`;
+                            if (!seenKeys.has(uniqueKey)) {
+                                seenKeys.add(uniqueKey);
+                                mergedItems.push(item);
+                            }
+                        });
+                    }
 
                     setFlights(mergedItems);
                 } catch (err) {
@@ -154,11 +161,10 @@
                 fetchFlightData(false);
                 const autoRefresh = setInterval(() => fetchFlightData(false), CACHE_DURATION);
                 return () => clearInterval(autoRefresh);
-            }, [currentTime.getHours(), flights.length === 0]); 
+            }, [currentTime.getHours()]); 
 
-            // 4. 과거 6시간 전부터 미래 6시간 후까지 정밀 타임 윈도우 스캔 필터링
             useEffect(() => {
-                if (flights.length === 0) return;
+                if (!flights || flights.length === 0) return;
 
                 const nowTimestamp = currentTime.getTime();
                 const sixHoursAgo = nowTimestamp - (6 * 60 * 60 * 1000);   
@@ -177,12 +183,10 @@
                     const flightDate = new Date(year, month, day, hours, minutes);
                     const flightTimestamp = flightDate.getTime();
 
-                    // 조건 A: 현재 기준 미래 6시간 이내 스케줄 전원 합격
                     if (flightTimestamp >= nowTimestamp && flightTimestamp <= sixHoursLater) {
                         return true;
                     }
 
-                    // 조건 B: 과거 6시간 전부터 현재 사이 스케줄 중 미출발(잔류 상태) 홀딩 킵
                     if (flightTimestamp >= sixHoursAgo && flightTimestamp < nowTimestamp) {
                         const remark = flight.remark ? String(flight.remark) : "";
                         if (remark.includes("지연") || remark.includes("결항") || remark.includes("마감") || remark.includes("최종") || remark.includes("탑승중") || remark.includes("준비") || remark.includes("대기")) {
@@ -193,7 +197,6 @@
                     return false;
                 });
 
-                // 전체 일정 타임라인 오름차순 정렬
                 processed.sort((a, b) => String(a.scheduleDatetime).localeCompare(String(b.scheduleDatetime)));
 
                 setFilteredFlights(prev => {
@@ -261,6 +264,12 @@
                 }
 
                 return <div className="w-full h-full"></div>;
+            };
+
+            const renderEstimatedTime = (flight) => {
+                const isDelayed = flight.remark && flight.remark.includes("지연");
+                if (!isDelayed) return ""; 
+                return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
             };
 
             const gridLayoutClass = "grid grid-cols-[100px_100px_minmax(250px,1fr)_240px_140px_180px] min-[1500px]:grid-cols-[100px_100px_minmax(300px,1fr)_240px_160px_140px_180px]";
@@ -349,7 +358,7 @@
                                     })
                                 ) : (
                                     <div className="text-center py-40 text-[#458cff] font-sans font-black text-2xl tracking-widest uppercase bg-[#134dab]/20 col-span-6 min-[1500px]:col-span-7">
-                                        현재 시간대에 배정된 출발 항공편이 없습니다.
+                                        항공편을 가져오는 중이거나 현재 노출 조건에 맞는 일정이 없습니다.
                                     </div>
                                 )}
                             </div>
