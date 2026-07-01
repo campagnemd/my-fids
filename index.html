@@ -19,6 +19,18 @@
             font-family: 'Roboto Mono', 'Inter', monospace; 
         }
         ::-webkit-scrollbar { display: none; }
+
+        /* 📊 가로 폭 콤팩트 압축 격자선 최적화 레이아웃 스펙 커스텀 정의 */
+        .fids-grid-7 {
+            display: grid;
+            grid-template-columns: 100px 100px minmax(300px, 1fr) 240px 140px 180px;
+        }
+        @media (min-width: 1500px) {
+            .fids-grid-8 {
+                display: grid;
+                grid-template-columns: 100px 100px minmax(350px, 1fr) 240px 160px 140px 180px;
+            }
+        }
     </style>
 </head>
 <body class="text-white antialiased select-none">
@@ -190,36 +202,30 @@
                 return id.slice(0, 2).toUpperCase();
             };
 
-            const renderEstimatedTime = (flight) => {
-                const isDelayed = flight.remark && flight.remark.includes("지연");
-                if (!isDelayed) return ""; 
-                return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
-            };
-
             const renderStatusAndStyle = (remark) => {
                 const status = remark || "정시";
                 
                 if (status.includes("탑승중")) {
-                    return <div className="w-full h-full flex items-center justify-center text-white font-black animate-pulse pr-6">탑승중</div>;
+                    return <div className="w-full h-full flex items-center justify-center text-white font-black animate-pulse text-center">탑승중</div>;
                 } else if (status.includes("준비") || status.includes("대기")) {
-                    return <div className="w-full h-full flex items-center justify-center text-white font-black pr-6">탑승준비</div>;
+                    return <div className="w-full h-full flex items-center justify-center text-white font-black text-center">탑승준비</div>;
                 } else if (status.includes("마감") || status.includes("최종")) {
-                    return <div className="w-full h-full flex items-center justify-center text-[#FFD700] font-black animate-pulse pr-6">마감예정</div>;
+                    return <div className="w-full h-full flex items-center justify-center text-[#FFD700] font-black animate-pulse text-center">마감예정</div>;
                 } else if (status.includes("지연")) {
                     return (
-                        <div className="w-full h-full bg-[#FF6D00] flex items-center justify-center text-white font-black mr-[-24px] pr-[24px]">
+                        <div className="w-full h-full bg-[#FF6D00] flex items-center justify-center text-white font-black text-center mr-[-24px] pr-[24px]">
                             지연
                         </div>
                     );
                 } else if (status.includes("결항")) {
                     return (
-                        <div className="w-full h-full bg-[#D50000] flex items-center justify-center text-white font-black mr-[-24px] pr-[24px]">
+                        <div className="w-full h-full bg-[#D50000] flex items-center justify-center text-white font-black text-center mr-[-24px] pr-[24px]">
                             결항
                         </div>
                     );
                 }
 
-                return <div className="w-full h-full pr-6"></div>;
+                return <div className="w-full h-full"></div>;
             };
 
             return (
@@ -246,18 +252,18 @@
 
                         {/* 📊 2번째 줄 & 3번째 줄 이하 데이터 매트릭스 */}
                         <div className="w-full">
-                            {/* ⬛ [수정 반영] 2번째 줄 항목 바: 기본 7열 구조 ➔ 1500px 이상에서 grid-cols-8 변경 및 체크인 hidden 제어 */}
-                            <div className="grid grid-cols-7 min-[1500px]:grid-cols-8 gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-[10px] text-2xl md:text-3xl font-black text-white uppercase tracking-wider text-center items-center">
+                            {/* ⬛ 2번째 줄 항목 바: [수정 반영] 예정/변경 고정축소 레이아웃 구조체 클래스 바인딩 및 우측 주요 항목 text-center 지정 */}
+                            <div className="fids-grid-7 min-[1500px]:fids-grid-8 gap-2 bg-[#000000] border-b border-[#1b2d4a] px-6 py-[10px] text-2xl md:text-3xl font-black text-white uppercase tracking-wider text-center items-center">
                                 <div>예정</div>
                                 <div>변경</div>
-                                <div className="col-span-2 text-center">도착지</div>
+                                <div className="text-center">도착지</div>
                                 <div>편명</div>
-                                <div className="hidden min-[1500px]:block text-[#FACC15]">체크인</div> {/* ◀ 1500px 미만 숨김, 이상 노란색 강조 */}
-                                <div>탑승구</div>
-                                <div className="pr-6">현황</div>
+                                <div className="hidden min-[1500px]:block text-[#FACC15] text-center">체크인</div>
+                                <div className="text-center">탑승구</div>
+                                <div className="text-center">현황</div>
                             </div>
 
-                            {/* 🟦 [수정 반영] 3번째 줄 이하 데이터 행: 데이터 바인딩 영역도 동일하게 7/8열 미디어 쿼리 전격 스위칭 */}
+                            {/* 🟦 3번째 줄 이하 데이터 행 */}
                             <div className="divide-y divide-[#162e58]/20 font-mono font-black text-2xl md:text-3xl">
                                 {pageData.length > 0 ? (
                                     pageData.map((flight, idx) => {
@@ -265,18 +271,22 @@
                                         const fltInfo = parseFlightId(flight.flightId);
                                         
                                         return (
-                                            <div key={idx} className={`grid grid-cols-7 min-[1500px]:grid-cols-8 gap-2 pl-6 text-center items-center transition-colors ${rowBgColor}`}>
+                                            <div key={idx} className={`fids-grid-7 min-[1500px]:fids-grid-8 gap-2 pl-6 text-center items-center transition-colors ${rowBgColor}`}>
                                                 
-                                                <div className="text-[#FFFFFF] font-black py-[10px]">{formatTime(flight.scheduleDatetime)}</div>
+                                                {/* 1. 예정시간 (너비 축소 정렬) */}
+                                                <div className="text-[#FFFFFF] font-black py-[10px] text-center">{formatTime(flight.scheduleDatetime)}</div>
                                                 
-                                                <div className="text-[#FACC15] font-black py-[10px]">
+                                                {/* 2. 변경시간 (너비 축소 정렬) */}
+                                                <div className="text-[#FACC15] font-black py-[10px] text-center">
                                                     {renderEstimatedTime(flight)}
                                                 </div>
                                                 
-                                                <div className="text-left pl-14 font-sans font-black text-[#FFFFFF] truncate col-span-2 tracking-wide py-[10px]">
+                                                {/* 3. 도착지 */}
+                                                <div className="text-left pl-14 font-sans font-black text-[#FFFFFF] truncate py-[10px] tracking-wide">
                                                     {flight.airport || "---"}
                                                 </div>
                                                 
+                                                {/* 4. 편명 컴포넌트 */}
                                                 <div className="flex items-center justify-center font-mono py-[10px]">
                                                     <div className="flex items-center w-[220px] text-left">
                                                         <div className="w-12 shrink-0 flex items-center justify-start">
@@ -292,14 +302,16 @@
                                                     </div>
                                                 </div>
                                                 
-                                                {/* 🛠️ 체크인 데이터 컬럼: 1500px 미만일 때 숨김 처리 */}
-                                                <div className="hidden min-[1500px]:block text-[#FACC15] tracking-wide font-black py-[10px]">
+                                                {/* 5. 체크인 카운터 (가운데 정렬 고정 완료) */}
+                                                <div className="hidden min-[1500px]:block text-[#FACC15] tracking-wide font-black py-[10px] text-center">
                                                     {flight.chkinRange || "—"}
                                                 </div>
                                                 
-                                                <div className="text-white font-black py-[10px]">{flight.gateNumber || "—"}</div>
+                                                {/* 6. 탑승구 (가운데 정렬 고정 완료) */}
+                                                <div className="text-white font-black py-[10px] text-center">{flight.gateNumber || "—"}</div>
                                                 
-                                                <div className="font-sans font-black h-full w-full flex items-center justify-center">
+                                                {/* 7. 현황 */}
+                                                <div className="font-sans font-black h-full w-full flex items-center justify-center text-center">
                                                     {renderStatusAndStyle(flight.remark)}
                                                 </div>
                                             </div>
@@ -314,6 +326,7 @@
                         </div>
                     </div>
 
+                    {/* 하단 푸터 바 */}
                     <footer className="mb-4 flex justify-between items-center text-[11px] font-bold text-[#1b3a6d] px-6">
                         <button onClick={() => fetchFlightData(true)} className="hover:text-[#315ba1] focus:outline-none">
                             [ FLIGHT DATA SYNC ]
