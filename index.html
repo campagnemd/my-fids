@@ -9,18 +9,16 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
+        /* 🛠️ [1. 폰트 강제 적용] 모든 요소에 돋움(Dotum)체 및 초고두께(900) 볼드 강제 덮어쓰기 */
+        * {
+            font-family: 'Dotum', '돋움', 'Apple SD Gothic Neo', sans-serif !important;
+            font-weight: 900 !important;
+        }
         
-        /* 1. 전체 글꼴 '돋움(Dotum)' 지정 및 초고두께 볼드 설정 */
         body { 
-            font-family: 'Dotum', '돋움', 'Apple SD Gothic Neo', sans-serif; 
-            font-weight: 900;
             background-color: #051126;
         }
-        .font-mono { 
-            font-family: 'Roboto Mono', 'Inter', monospace; 
-            font-weight: 700;
-        }
+        
         ::-webkit-scrollbar { display: none; }
     </style>
 </head>
@@ -39,17 +37,16 @@
             const [flights, setFlights] = useState([]);
             const [filteredFlights, setFilteredFlights] = useState([]);
             const [currentPage, setCurrentPage] = useState(0);
+
+            // 화면 커스텀 제어 상태 (초기값 설정)
             const [showCodeshare, setShowCodeshare] = useState(false);
+            const [itemsPerPage, setItemsPerPage] = useState(11); 
+            const [rowHeight, setRowHeight] = useState(55);       
+            const [maxPages, setMaxPages] = useState(10);         
+            const [showCheckin, setShowCheckin] = useState(true); 
+            const [showTerminal, setShowTerminal] = useState(true); 
+            const [showConfig, setShowConfig] = useState(false);   
 
-            // 🛠️ [5. 화면 커스텀 관련 핵심 상태 변수들]
-            const [itemsPerPage, setItemsPerPage] = useState(11); // 5-1. 화면 표시 줄 개수
-            const [rowHeight, setRowHeight] = useState(55);       // 5-2. 줄의 높이 (px)
-            const [maxPages, setMaxPages] = useState(10);         // 5-3. 최대 출력 페이지수
-            const [showCheckin, setShowCheckin] = useState(true); // 5-4. 체크인 표시 여부
-            const [showTerminal, setShowTerminal] = useState(true); // 5-4. 터미널 표시 여부
-            const [showConfig, setShowConfig] = useState(false);   // 커스텀 제어판 열기/닫기
-
-            // 실시간 브라우저 가로폭 감지 (반응형 안전장치)
             const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
             const filteredFlightsRef = useRef([]);
@@ -335,14 +332,12 @@
             if (displayCheckinActive) gridColsStructure += " 160px";
             gridColsStructure += " 140px 180px";
 
+            // 🛠️ [2. & 3. 통합] 줄 높이와 글자 크기를 한 번에 제어하는 동적 연산 엔진 (헤더/데이터/푸터 모두 공유)
             const dynamicGridStyle = {
                 display: "grid",
                 gridTemplateColumns: gridColsStructure,
                 alignItems: "stretch", 
-                height: `${rowHeight}px`
-            };
-
-            const dynamicFontStyle = {
+                height: `${rowHeight}px`,
                 fontSize: `${rowHeight * 0.43}px`,
                 lineHeight: `${rowHeight}px`
             };
@@ -350,7 +345,7 @@
             return (
                 <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none">
                     <div>
-                        {/* 🟦 1번째 줄 (헤더) */}
+                        {/* 🟦 1번째 줄 (최상단 헤더) */}
                         <header className="relative flex items-center bg-[#458cff] shadow-md z-10" style={{ height: `${rowHeight + 10}px` }}>
                             <div className="absolute left-6 flex items-center">
                                 <svg style={{ width: `${rowHeight * 0.7}px`, height: `${rowHeight * 0.7}px` }} className="text-white" viewBox="0 0 24 24" fill="currentColor">
@@ -359,20 +354,19 @@
                             </div>
 
                             <div className="w-full text-center">
-                                <span className="text-white font-black tracking-wide font-sans" style={{ fontSize: `${rowHeight * 0.5}px` }}>
+                                <span className="text-white tracking-wide" style={{ fontSize: `${rowHeight * 0.5}px` }}>
                                     출발 Departures
                                 </span>
                             </div>
                             
-                            <div className="absolute right-6 text-white font-mono font-bold tracking-wider" style={{ fontSize: `${rowHeight * 0.5}px` }}>
+                            <div className="absolute right-6 text-white tracking-wider" style={{ fontSize: `${rowHeight * 0.5}px` }}>
                                 {getPureTimeString(currentTime)}
                             </div>
                         </header>
 
-                        {/* 📊 2번째 줄 & 3번째 줄 이하 데이터 매트릭스 */}
                         <div className="w-full">
-                            {/* ⬛ 2번째 줄 항목 바 (예정 -> 시간으로 변경) */}
-                            <div style={dynamicGridStyle} className="bg-[#000000] border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center font-black">
+                            {/* ⬛ 2번째 줄 항목 바 (동적 폰트/높이 엔진 완벽 연동) */}
+                            <div style={dynamicGridStyle} className="bg-[#000000] border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
                                 <div className="pl-6 flex items-center justify-center">시간</div>
                                 <div className="flex items-center justify-center">변경</div>
                                 <div className="text-center flex items-center justify-center">도착지</div>
@@ -386,7 +380,7 @@
                             </div>
 
                             {/* 🟦 3번째 줄 이하 실시간 데이터 행 */}
-                            <div className="divide-y divide-[#162e58]/20 font-mono font-black" style={dynamicFontStyle}>
+                            <div className="divide-y divide-[#162e58]/20">
                                 {pageData.length > 0 ? (
                                     pageData.map((flight, idx) => {
                                         const rowBgColor = idx % 2 === 0 ? "bg-[#1a62d6]" : "bg-[#134dab]";
@@ -396,17 +390,17 @@
                                         return (
                                             <div key={idx} style={dynamicGridStyle} className={`text-center items-center transition-colors ${rowBgColor}`}>
                                                 
-                                                <div className="text-[#FFFFFF] font-black text-center pl-6 flex items-center justify-center">{schedTime}</div>
+                                                <div className="text-[#FFFFFF] text-center pl-6 flex items-center justify-center">{schedTime}</div>
                                                 
-                                                <div className="text-[#FACC15] font-black text-center flex items-center justify-center">
+                                                <div className="text-[#FACC15] text-center flex items-center justify-center">
                                                     {renderEstimatedTime(flight)}
                                                 </div>
                                                 
-                                                <div className="text-left pl-14 font-sans font-black text-[#FFFFFF] truncate tracking-wide flex items-center">
+                                                <div className="text-left pl-14 text-[#FFFFFF] truncate tracking-wide flex items-center">
                                                     {flight.airport || "---"}
                                                 </div>
                                                 
-                                                <div className="flex items-center justify-center font-mono h-full">
+                                                <div className="flex items-center justify-center h-full">
                                                     <div className="flex items-center w-[220px] text-left h-full">
                                                         <div className="w-14 shrink-0 flex items-center justify-start h-full py-[2px]">
                                                             <img 
@@ -417,33 +411,33 @@
                                                                 className="object-contain rounded-sm"
                                                             />
                                                         </div>
-                                                        <span className="w-16 shrink-0 text-white text-center font-black">{fltInfo.code}</span>
-                                                        <span className="text-white font-black pl-3 truncate">{fltInfo.num}</span>
+                                                        <span className="w-16 shrink-0 text-white text-center">{fltInfo.code}</span>
+                                                        <span className="text-white pl-3 truncate">{fltInfo.num}</span>
                                                     </div>
                                                 </div>
                                                 
                                                 {displayTerminalActive && (
-                                                    <div className="text-[#4AF2A1] tracking-wide font-black text-center flex items-center justify-center">
+                                                    <div className="text-[#4AF2A1] tracking-wide text-center flex items-center justify-center">
                                                         {getTerminalInfo(flight.gateNumber, flight.terminalId)}
                                                     </div>
                                                 )}
                                                 
                                                 {displayCheckinActive && (
-                                                    <div className="text-[#FACC15] tracking-wide font-black text-center flex items-center justify-center">
+                                                    <div className="text-[#FACC15] tracking-wide text-center flex items-center justify-center">
                                                         {flight.chkinRange || "—"}
                                                     </div>
                                                 )}
                                                 
-                                                <div className="text-white font-black text-center flex items-center justify-center">{flight.gateNumber || "—"}</div>
+                                                <div className="text-white text-center flex items-center justify-center">{flight.gateNumber || "—"}</div>
                                                 
-                                                <div className="font-sans font-black h-full w-full flex items-center justify-center">
+                                                <div className="h-full w-full flex items-center justify-center">
                                                     {renderStatusAndStyle(flight.remark)}
                                                 </div>
                                             </div>
                                         );
                                     })
                                 ) : (
-                                    <div className="text-center py-40 text-[#458cff] font-sans font-black text-2xl tracking-widest uppercase bg-[#134dab]/20">
+                                    <div className="text-center py-40 text-[#458cff] text-2xl tracking-widest uppercase bg-[#134dab]/20">
                                         실시간 비행 데이터를 불러오는 중입니다...
                                     </div>
                                 )}
@@ -454,16 +448,18 @@
                     {/* 🎛️ 하단 관제 커스텀 제어 스위치 패널 통합 영역 */}
                     <div className="flex flex-col bg-[#030b1a]/90 border-t border-[#162e58]/50 shadow-2xl transition-all duration-300">
                         
+                        {/* 🛠️ [4. & 5. 통합] 내부로 편입된 동일 디자인 토글 스위치 3종 세트 */}
                         {showConfig && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-8 py-6 bg-[#041430] text-sm text-slate-300 font-sans border-b border-[#162e58]/30">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-8 py-6 bg-[#041430] text-sm text-slate-300 border-b border-[#162e58]/30">
+                                
                                 <div className="flex flex-col space-y-2">
-                                    <div className="flex justify-between font-bold">
+                                    <div className="flex justify-between">
                                         <span>출력 항공편 수 (줄 개수)</span>
                                         <span className="text-[#4AF2A1]">{itemsPerPage} 행</span>
                                     </div>
                                     <input type="range" min="5" max="20" value={itemsPerPage} onChange={(e) => setItemsPerPage(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                     
-                                    <div className="flex justify-between font-bold pt-2">
+                                    <div className="flex justify-between pt-2">
                                         <span>최대 출력 페이지수 (제한)</span>
                                         <span className="text-[#4AF2A1]">{maxPages} P</span>
                                     </div>
@@ -471,55 +467,72 @@
                                 </div>
 
                                 <div className="flex flex-col space-y-2 justify-center">
-                                    <div className="flex justify-between font-bold">
+                                    <div className="flex justify-between">
                                         <span>전광판 줄 높이 (폰트 자동 비례)</span>
                                         <span className="text-[#4AF2A1]">{rowHeight} px</span>
                                     </div>
                                     <input type="range" min="40" max="95" value={rowHeight} onChange={(e) => setRowHeight(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
 
-                                <div className="flex flex-col space-y-3 justify-center pl-4">
-                                    <span className="font-bold block text-xs tracking-wider text-slate-400">컬럼 노출 제어 (1500px 이상 와이드 전용)</span>
-                                    <div className="flex space-x-6">
+                                <div className="flex flex-col space-y-4 justify-center pl-4 border-l border-[#162e58]/50">
+                                    <span className="text-xs tracking-wider text-slate-400">화면 표시 제어 (ON/OFF 토글)</span>
+                                    
+                                    <div className="flex flex-col space-y-3">
+                                        {/* 터미널 토글 */}
                                         <label className="flex items-center cursor-pointer group">
-                                            <input type="checkbox" checked={showTerminal} onChange={() => setShowTerminal(!showTerminal)} className="sr-only" />
-                                            <div className={`w-8 h-4 rounded-full transition-colors ${showTerminal ? 'bg-[#4AF2A1]' : 'bg-slate-600'}`}></div>
-                                            <span className="ml-2 text-xs font-bold">터미널</span>
+                                            <div className="relative">
+                                                <input type="checkbox" className="sr-only" checked={showTerminal} onChange={() => setShowTerminal(!showTerminal)} />
+                                                <div className={`block w-9 h-5 rounded-full transition-colors ${showTerminal ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showTerminal ? 'transform translate-x-4' : ''}`}></div>
+                                            </div>
+                                            <span className={`ml-3 text-xs tracking-wider transition-colors ${showTerminal ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                                                터미널 정보 (1500px 이상)
+                                            </span>
                                         </label>
+                                        
+                                        {/* 체크인 토글 */}
                                         <label className="flex items-center cursor-pointer group">
-                                            <input type="checkbox" checked={showCheckin} onChange={() => setShowCheckin(!showCheckin)} className="sr-only" />
-                                            <div className={`w-8 h-4 rounded-full transition-colors ${showCheckin ? 'bg-[#4AF2A1]' : 'bg-slate-600'}`}></div>
-                                            <span className="ml-2 text-xs font-bold">체크인</span>
+                                            <div className="relative">
+                                                <input type="checkbox" className="sr-only" checked={showCheckin} onChange={() => setShowCheckin(!showCheckin)} />
+                                                <div className={`block w-9 h-5 rounded-full transition-colors ${showCheckin ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showCheckin ? 'transform translate-x-4' : ''}`}></div>
+                                            </div>
+                                            <span className={`ml-3 text-xs tracking-wider transition-colors ${showCheckin ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                                                체크인 카운터 (1500px 이상)
+                                            </span>
+                                        </label>
+
+                                        {/* 코드쉐어 토글 (패널 내부로 편입 완결) */}
+                                        <label className="flex items-center cursor-pointer group">
+                                            <div className="relative">
+                                                <input type="checkbox" className="sr-only" checked={showCodeshare} onChange={() => setShowCodeshare(!showCodeshare)} />
+                                                <div className={`block w-9 h-5 rounded-full transition-colors ${showCodeshare ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showCodeshare ? 'transform translate-x-4' : ''}`}></div>
+                                            </div>
+                                            <span className={`ml-3 text-xs tracking-wider transition-colors ${showCodeshare ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                                                코드쉐어 편명 (공동운항)
+                                            </span>
                                         </label>
                                     </div>
                                 </div>
+
                             </div>
                         )}
 
                         <footer className="py-4 flex justify-between items-center px-6">
-                            <div className="flex items-center space-x-8">
-                                <button onClick={() => fetchFlightData(true)} className="text-[11px] font-bold text-[#1b3a6d] hover:text-[#315ba1] focus:outline-none">
+                            <div className="flex items-center space-x-6">
+                                <button onClick={() => fetchFlightData(true)} className="text-[11px] text-[#1b3a6d] hover:text-[#315ba1] focus:outline-none">
                                     [ FLIGHT DATA SYNC ]
                                 </button>
-                                
-                                <label className="flex items-center cursor-pointer group">
-                                    <div className="relative">
-                                        <input type="checkbox" className="sr-only" checked={showCodeshare} onChange={() => setShowCodeshare(!showCodeshare)} />
-                                        <div className={`block w-9 h-5 rounded-full transition-colors ${showCodeshare ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
-                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showCodeshare ? 'transform translate-x-4' : ''}`}></div>
-                                    </div>
-                                    <div className={`ml-3 font-mono font-bold text-[11px] tracking-wider transition-colors ${showCodeshare ? 'text-[#4AF2A1]' : 'text-[#1b3a6d] group-hover:text-[#315ba1]'}`}>
-                                        CODESHARE
-                                    </div>
-                                </label>
 
-                                <button onClick={() => setShowConfig(!showConfig)} className={`text-[11px] font-bold px-3 py-1 rounded border border-[#1b3a6d]/40 transition-colors ${showConfig ? 'bg-[#458cff] text-white border-transparent' : 'text-[#2e599e] hover:bg-[#162e58]/20'}`}>
+                                <button onClick={() => setShowConfig(!showConfig)} className={`text-[11px] px-3 py-1 rounded border border-[#1b3a6d]/40 transition-colors ${showConfig ? 'bg-[#458cff] text-white border-transparent' : 'text-[#2e599e] hover:bg-[#162e58]/20'}`}>
                                     {showConfig ? "[ CUSTOM PANEL CLOSE ]" : "[ CUSTOM PANEL OPEN ]"}
                                 </button>
                             </div>
                             
+                            {/* 🛠️ [3. 하단 페이지 표시 동적 연동] 줄 높이(rowHeight) 스케일과 글자 크기, 라인 하이트 완벽 동치화 */}
                             {totalPages > 1 && (
-                                <div className="text-white font-mono font-black text-2xl md:text-3xl tracking-widest">
+                                <div className="text-white tracking-widest" style={{ fontSize: `${rowHeight * 0.43}px`, lineHeight: `${rowHeight}px` }}>
                                     PAGE {currentPage + 1} / {totalPages}
                                 </div>
                             )}
