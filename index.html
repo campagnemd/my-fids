@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght=700;900&family=Roboto+Mono:wght=700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=700;900&family=Pretendard:wght@700;900&family=Roboto+Mono:wght@700&display=swap');
         
         body { 
             font-family: 'Pretendard', sans-serif; 
@@ -62,7 +62,6 @@
                 return () => clearInterval(pageTimer);
             }, []);
 
-            // 🛠️ [날짜 포맷 헬퍼 함수]
             const getFormattedDate = (dateObj) => {
                 const year = dateObj.getFullYear();
                 const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -70,79 +69,84 @@
                 return `${year}${month}${day}`;
             };
 
-            // 🛠️ [단일 날짜 API 패치 코어]
-            const fetchSingleDayData = async (dateStr) => {
-                const params = new URLSearchParams({
-                    serviceKey: SERVICE_KEY,
-                    type: 'json',
-                    numOfRows: '1000', 
-                    pageNo: '1',
-                    searchDate: dateStr,     
-                    searchdtCode: 'S',        
-                    passengerOrCargo: 'P'     
-                });
-                const targetUrl = `/api/icn/B551177/statusOfAllFltDeOdp/getFltDeparturesDeOdp?${params.toString()}`;
-                const response = await fetch(targetUrl);
-                if (!response.ok) return [];
-                const data = await response.json();
-                if (data?.response?.header?.resultCode !== "00") return [];
-                const rawItems = data?.response?.body?.items || [];
-                return Array.isArray(rawItems) ? rawItems : [];
+            // [단일 데이터 패치] 개별 날짜별로 캐시를 완벽히 분리 제어합니다.
+            const fetchSingleDayData = async (dateStr, forceRefresh) => {
+                const cacheKey = `fids_raw_data_${dateStr}`;
+                const cachedTimeKey = `fids_raw_time_${dateStr}`;
+                const cachedData = localStorage.getItem(cacheKey);
+                const cachedTime = localStorage.getItem(cachedTimeKey);
+                const nowTimestamp = Date.now();
+
+                if (!forceRefresh && cachedData && cachedTime && (nowTimestamp - cachedTime < CACHE_DURATION)) {
+                    return JSON.parse(cachedData);
+                }
+
+                try {
+                    const params = new URLSearchParams({
+                        serviceKey: SERVICE_KEY,
+                        type: 'json',
+                        numOfRows: '1000', 
+                        pageNo: '1',
+                        searchDate: dateStr,     
+                        searchdtCode: 'S',        
+                        passengerOrCargo: 'P'     
+                    });
+                    const targetUrl = `/api/icn/B551177/statusOfAllFltDeOdp/getFltDeparturesDeOdp?${params.toString()}`;
+                    const response = await fetch(targetUrl);
+                    if (!response.ok) return cachedData ? JSON.parse(cachedData) : [];
+                    
+                    const data = await response.json();
+                    if (data?.response?.header?.resultCode !== "00") return cachedData ? JSON.parse(cachedData) : [];
+                    
+                    const rawItems = data?.response?.body?.items || [];
+                    const itemList = Array.isArray(rawItems) ? rawItems : [];
+                    
+                    localStorage.setItem(cacheKey, JSON.stringify(itemList));
+                    localStorage.setItem(cachedTimeKey, nowTimestamp.toString());
+                    return itemList;
+                } catch (err) {
+                    console.error(err);
+                    return cachedData ? JSON.parse(cachedData) : [];
+                }
             };
 
-            // 🛠️ [수정 핵심] 자정 전후 경계선 다중 날짜 스마트 크롤링 및 로컬 캐싱 엔진
+            // 🛠️ [버그 수정 핵심] 데이터 소실 없는 완벽한 멀티 데이트 병합 엔진
             const fetchFlightData = async (forceRefresh = false) => {
                 const now = new Date();
                 const currentHour = now.getHours();
                 
-                // 오늘, 어제, 내일 날짜 계산
                 const todayStr = getFormattedDate(now);
                 const yesterdayStr = getFormattedDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
                 const tomorrowStr = getFormattedDate(new Date(now.getTime() + 24 * 60 * 60 * 1000));
 
-                // 현재 시간대에 따라 필요한 타깃 날짜 배열 빌드
                 let targetDates = [todayStr];
                 if (currentHour >= 0 && currentHour < 6) {
-                    targetDates.unshift(yesterdayStr); // 새벽 시간대에는 어제 데이터도 필요
+                    targetDates.unshift(yesterdayStr); 
                 } else if (currentHour >= 18 && currentHour <= 23) {
-                    targetDates.push(tomorrowStr);    // 야간 시간대에는 내일 데이터도 필요
-                }
-
-                const cacheKey = `fids_flights_data_${targetDates.join('_')}`;
-                const cachedData = localStorage.getItem(cacheKey);
-                const cachedTime = localStorage.getItem('fids_flights_timestamp');
-                const nowTimestamp = Date.now();
-
-                if (!forceRefresh && cachedData && cachedTime && (nowTimestamp - cachedTime < CACHE_DURATION)) {
-                    setFlights(JSON.parse(cachedData));
-                    return;
+                    targetDates.push(tomorrowStr);    
                 }
 
                 try {
-                    // 동시 다발적으로 필요한 모든 날짜 데이터 호출 처리
-                    const requests = targetDates.map(date => fetchSingleDayData(date));
-                    const results = await Promise.all(requests);
+                    // 각 날짜별 데이터를 순차/독립적으로 가져옵니다. (덮어쓰기 현상 완전 방지)
+                    const dataPromises = targetDates.map(date => fetchSingleDayData(date, forceRefresh));
+                    const datasets = await Promise.all(dataPromises);
                     
-                    // 불러온 다중 날짜 배열 하나로 통합 병합 (중복 flightId 제거)
+                    // 오늘 데이터와 경계선 데이터를 하나의 거대한 배열로 유실 없이 융합
                     const mergedItems = [];
-                    const seenIds = new Set();
+                    const seenKeys = new Set();
                     
-                    results.flat().forEach(item => {
-                        // 고유 키 조합 생성 (날짜 스케줄 키가 다를 수 있으므로 ID와 예정시각 결합)
+                    datasets.flat().forEach(item => {
+                        if (!item || !item.flightId || !item.scheduleDatetime) return;
                         const uniqueKey = `${item.flightId}_${item.scheduleDatetime}`;
-                        if (!seenIds.has(uniqueKey)) {
-                            seenIds.add(uniqueKey);
+                        if (!seenKeys.has(uniqueKey)) {
+                            seenKeys.add(uniqueKey);
                             mergedItems.push(item);
                         }
                     });
 
-                    localStorage.setItem(cacheKey, JSON.stringify(mergedItems));
-                    localStorage.setItem('fids_flights_timestamp', nowTimestamp.toString());
-
                     setFlights(mergedItems);
                 } catch (err) {
-                    console.error(err);
-                    if (cachedData) setFlights(JSON.parse(cachedData));
+                    console.error("데이터 병합 실패:", err);
                 }
             };
 
@@ -150,12 +154,14 @@
                 fetchFlightData(false);
                 const autoRefresh = setInterval(() => fetchFlightData(false), CACHE_DURATION);
                 return () => clearInterval(autoRefresh);
-            }, [currentTime.getHours()]); // 시간이 바뀌어 경계선에 진입하면 리패치 트리거
+            }, [currentTime.getHours(), flights.length === 0]); 
 
-            // 4. [수정 핵심] 과거 6시간 스캔 타임 테이블 필터 시스템
+            // 4. 과거 6시간 전부터 미래 6시간 후까지 정밀 타임 윈도우 스캔 필터링
             useEffect(() => {
+                if (flights.length === 0) return;
+
                 const nowTimestamp = currentTime.getTime();
-                const sixHoursAgo = nowTimestamp - (6 * 60 * 60 * 1000);   // 과거 6시간 전으로 변경
+                const sixHoursAgo = nowTimestamp - (6 * 60 * 60 * 1000);   
                 const sixHoursLater = nowTimestamp + (6 * 60 * 60 * 1000);  
 
                 const processed = flights.filter(flight => {
@@ -171,15 +177,14 @@
                     const flightDate = new Date(year, month, day, hours, minutes);
                     const flightTimestamp = flightDate.getTime();
 
-                    // 조건 A: 현재 시점부터 미래 6시간 이내인 스케줄은 통과
+                    // 조건 A: 현재 기준 미래 6시간 이내 스케줄 전원 합격
                     if (flightTimestamp >= nowTimestamp && flightTimestamp <= sixHoursLater) {
                         return true;
                     }
 
-                    // 조건 B: 과거 6시간 전 ~ 현재 시각 사이의 타임 스캔
+                    // 조건 B: 과거 6시간 전부터 현재 사이 스케줄 중 미출발(잔류 상태) 홀딩 킵
                     if (flightTimestamp >= sixHoursAgo && flightTimestamp < nowTimestamp) {
                         const remark = flight.remark ? String(flight.remark) : "";
-                        // 이미 가버린 정상 "출발" 항공편을 제외하고 비정상 상태 홀딩 비행기 전원 킵
                         if (remark.includes("지연") || remark.includes("결항") || remark.includes("마감") || remark.includes("최종") || remark.includes("탑승중") || remark.includes("준비") || remark.includes("대기")) {
                             return true;
                         }
@@ -188,7 +193,7 @@
                     return false;
                 });
 
-                // 연월일 시간 전체 정렬로 유연한 오름차순 연산 매칭
+                // 전체 일정 타임라인 오름차순 정렬
                 processed.sort((a, b) => String(a.scheduleDatetime).localeCompare(String(b.scheduleDatetime)));
 
                 setFilteredFlights(prev => {
@@ -256,12 +261,6 @@
                 }
 
                 return <div className="w-full h-full"></div>;
-            };
-
-            const renderEstimatedTime = (flight) => {
-                const isDelayed = flight.remark && flight.remark.includes("지연");
-                if (!isDelayed) return ""; 
-                return formatTime(flight.estimatedDatetime || flight.scheduleDatetime);
             };
 
             const gridLayoutClass = "grid grid-cols-[100px_100px_minmax(250px,1fr)_240px_140px_180px] min-[1500px]:grid-cols-[100px_100px_minmax(300px,1fr)_240px_160px_140px_180px]";
