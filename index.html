@@ -17,6 +17,10 @@
             font-weight: 900 !important;
         }
         
+        html, body {
+            overflow-x: hidden;
+        }
+        
         body { 
             background-color: #051126;
         }
@@ -403,7 +407,7 @@
 
             const renderStatusAndStyle = (remark) => {
                 const status = remark || "정시";
-                const baseClass = "w-full h-full flex items-center justify-center font-black text-center pr-6 ";
+                const baseClass = "w-full h-full flex items-center justify-center font-black text-center ";
                 
                 if (status.includes("탑승중")) {
                     return <div className={`${baseClass} text-white animate-pulse`}>탑승중</div>;
@@ -436,14 +440,25 @@
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
 
-            const singleFlightWidth = showLogo ? 150 : 100;
+            // 🛠️ 확대/축소(rowHeight) 값에 비례해 각 칸의 좌우 폭도 함께 늘어나도록 스케일 계산 (도착지 칸 제외)
+            const zoomScale = rowHeight / 55;
+            const scalePx = (base) => Math.round(base * zoomScale);
+
+            const singleFlightWidth = scalePx(showLogo ? 150 : 100);
             const flightColWidth = showCodeshare ? singleFlightWidth * 2 : singleFlightWidth;
+            const timeColWidth = scalePx(110);
+            const changeColWidth = scalePx(110);
+            const terminalColWidth = scalePx(110);
+            const checkinColWidth = scalePx(160);
+            const gateColWidth = scalePx(140);
+            const statusColWidth = scalePx(180);
+
             let gridColsStructure = flightFirst
-                ? `110px 110px ${flightColWidth}px minmax(220px, 1fr)`
-                : `110px 110px minmax(220px, 1fr) ${flightColWidth}px`;
-            if (showTerminal) gridColsStructure += " 110px";
-            if (showCheckin) gridColsStructure += " 160px";
-            gridColsStructure += " 140px 180px";
+                ? `${timeColWidth}px ${changeColWidth}px ${flightColWidth}px minmax(40px, 1fr)`
+                : `${timeColWidth}px ${changeColWidth}px minmax(40px, 1fr) ${flightColWidth}px`;
+            if (showTerminal) gridColsStructure += ` ${terminalColWidth}px`;
+            if (showCheckin) gridColsStructure += ` ${checkinColWidth}px`;
+            gridColsStructure += ` ${gateColWidth}px ${statusColWidth}px`;
 
             const dynamicGridStyle = {
                 display: "grid",
@@ -460,9 +475,7 @@
                         {showHeader && (
                             <header className="relative flex items-center shadow-md z-10 px-6 transition-colors duration-300" style={{ height: `${rowHeight}px`, backgroundColor: headerColor }}>
                                 <div className="absolute left-6 flex items-center h-full">
-                                    <svg style={{ width: `${rowHeight * 0.6}px`, height: `${rowHeight * 0.6}px` }} className="text-white" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
-                                    </svg>
+                                    <img src="data:image/png;base64,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" alt="departure" style={{ width: `${rowHeight * 0.62}px`, height: `${rowHeight * 0.62}px`, filter: 'invert(1)' }} className="object-contain" />
                                 </div>
 
                                 <div className="w-full text-center h-full flex items-center justify-center">
@@ -474,8 +487,8 @@
                         )}
 
                         <div className="w-full">
-                            <div style={dynamicGridStyle} style={{...dynamicGridStyle, backgroundColor: tableHeaderColor}} className="border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
-                                <div className="pl-6 flex items-center justify-center">시간</div>
+                            <div style={{...dynamicGridStyle, backgroundColor: tableHeaderColor}} className="border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
+                                <div className="flex items-center justify-center">시간</div>
                                 <div className="flex items-center justify-center">변경</div>
                                 {flightFirst ? (
                                     <React.Fragment>
@@ -493,7 +506,7 @@
                                 {showCheckin && <div className="text-white flex items-center justify-center">체크인</div>}
                                 
                                 <div className="flex items-center justify-center">탑승구</div>
-                                <div className="pr-6 flex items-center justify-center">현황</div>
+                                <div className="flex items-center justify-center">현황</div>
                             </div>
 
                             <div className="divide-y divide-[#162e58]/20">
@@ -561,7 +574,7 @@
                                             /* 🛠️ fade-content 클래스를 행에 적용하여 배경색(currentRowBg)은 남기고 자식(텍스트)만 페이드 아웃 */
                                             <div key={idx} style={{ ...dynamicGridStyle, backgroundColor: currentRowBg }} className={`text-center items-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`}>
                                                 
-                                                <div className="text-[#FFFFFF] text-center pl-6 flex items-center justify-center">{schedTime}</div>
+                                                <div className="text-[#FFFFFF] text-center flex items-center justify-center">{schedTime}</div>
                                                 
                                                 <div className={`text-center flex items-center justify-center ${highlightChange ? 'text-[#FACC15]' : 'text-white'}`}>
                                                     {renderEstimatedTime(flight)}
@@ -653,7 +666,7 @@
                                     
                                     <div>
                                         <div className="flex justify-between">
-                                            <span>줄 높이 스케일</span>
+                                            <span>확대/축소</span>
                                             <span className="text-[#4AF2A1]">{rowHeight}</span>
                                         </div>
                                         <input type="range" min="40" max="95" value={rowHeight} onChange={(e) => setRowHeight(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
