@@ -37,13 +37,24 @@
             const [filteredFlights, setFilteredFlights] = useState([]);
             const [currentPage, setCurrentPage] = useState(0);
 
-            const [showCodeshare, setShowCodeshare] = useState(false);
+            // 🛠️ [커스텀 패널 상태 변수 총집합]
+            const [showConfig, setShowConfig] = useState(false);
+            
+            // 1. 디스플레이 및 스케일 제어
             const [itemsPerPage, setItemsPerPage] = useState(11); 
             const [rowHeight, setRowHeight] = useState(55);       
+            
+            // 2. 시간 범위 및 타이머 제어
+            const [pastHours, setPastHours] = useState(6);        // 과거 표시 범위 (시간)
+            const [futureHours, setFutureHours] = useState(6);    // 미래 표시 범위 (시간)
+            const [flipInterval, setFlipInterval] = useState(10); // 페이지 전환 속도 (초)
             const [maxPages, setMaxPages] = useState(10);         
-            const [showCheckin, setShowCheckin] = useState(true); 
+            
+            // 3. 토글 스위치 제어
             const [showTerminal, setShowTerminal] = useState(true); 
-            const [showConfig, setShowConfig] = useState(false);   
+            const [showCheckin, setShowCheckin] = useState(true); 
+            const [showCodeshare, setShowCodeshare] = useState(false);
+            const [showDeparted, setShowDeparted] = useState(false); // 출발·완료편 표시 여부
 
             const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
@@ -63,6 +74,7 @@
                 return () => clearInterval(clockTimer);
             }, []);
 
+            // 🛠️ [타이머 동적 변경 적용] flipInterval 상태값과 연동
             useEffect(() => {
                 const pageTimer = setInterval(() => {
                     const totalItems = filteredFlightsRef.current.length;
@@ -72,10 +84,10 @@
                         
                         setCurrentPage(p => (p + 1) % (maxPageLimit || 1));
                     }
-                }, 10000); 
+                }, flipInterval * 1000); 
 
                 return () => clearInterval(pageTimer);
-            }, [itemsPerPage, maxPages]);
+            }, [itemsPerPage, maxPages, flipInterval]);
 
             const getFormattedDate = (dateObj) => {
                 const year = dateObj.getFullYear();
@@ -134,20 +146,19 @@
                 }
             };
 
+            // 🛠️ [스마트 날짜 병합 엔진] 과거/미래 시간 설정값에 맞춰 필요한 날짜 배열 동적 생성
             const fetchFlightData = async (forceRefresh = false) => {
                 const now = new Date();
-                const currentHour = now.getHours();
+                const pastDate = new Date(now.getTime() - (pastHours * 60 * 60 * 1000));
+                const futureDate = new Date(now.getTime() + (futureHours * 60 * 60 * 1000));
                 
                 const todayStr = getFormattedDate(now);
-                const yesterdayStr = getFormattedDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
-                const tomorrowStr = getFormattedDate(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+                const pastStr = getFormattedDate(pastDate);
+                const futureStr = getFormattedDate(futureDate);
 
                 let targetDates = [todayStr];
-                if (currentHour >= 0 && currentHour < 6) {
-                    targetDates.unshift(yesterdayStr); 
-                } else if (currentHour >= 18 && currentHour <= 23) {
-                    targetDates.push(tomorrowStr);    
-                }
+                if (pastStr !== todayStr) targetDates.unshift(pastStr);
+                if (futureStr !== todayStr && !targetDates.includes(futureStr)) targetDates.push(futureStr);
 
                 try {
                     const datasets = [];
@@ -201,14 +212,15 @@
                 fetchFlightData(false);
                 const autoRefresh = setInterval(() => fetchFlightData(false), CACHE_DURATION);
                 return () => clearInterval(autoRefresh);
-            }, []); 
+            }, [pastHours, futureHours]); // 조회 범위가 바뀌면 즉시 리패치 발동
 
+            // 🛠️ [최종 정밀 필터링 로직] 모든 슬라이더 변수 실시간 반영
             useEffect(() => {
                 if (!flights || flights.length === 0) return;
 
                 const nowTimestamp = currentTime.getTime();
-                const sixHoursAgo = nowTimestamp - (6 * 60 * 60 * 1000);   
-                const sixHoursLater = nowTimestamp + (6 * 60 * 60 * 1000);  
+                const startBoundary = nowTimestamp - (pastHours * 60 * 60 * 1000);   
+                const endBoundary = nowTimestamp + (futureHours * 60 * 60 * 1000);  
 
                 const processed = flights.filter(flight => {
                     if (!showCodeshare && flight.isCodeshare) return false;
@@ -225,15 +237,26 @@
                     const flightDate = new Date(year, month, day, hours, minutes);
                     const flightTimestamp = flightDate.getTime();
 
-                    if (flightTimestamp >= nowTimestamp && flightTimestamp <= sixHoursLater) {
-                        return true;
-                    }
+                    const remark = flight.remark ? String(flight.remark) : "";
+                    const isCompleted = remark.includes("출발") || remark.includes("이륙") || remark.includes("종료");
 
-                    if (flightTimestamp >= sixHoursAgo && flightTimestamp < nowTimestamp) {
-                        const remark = flight.remark ? String(flight.remark) : "";
-                        if (remark.includes("지연") || remark.includes("결항") || remark.includes("마감") || remark.includes("최종") || remark.includes("탑승중") || remark.includes("준비") || remark.includes("대기")) {
-                            return true;
+                    // 필터 통과 조건 판단
+                    if (flightTimestamp >= startBoundary && flightTimestamp <= endBoundary) {
+                        // 만약 토글이 꺼져있는데, 이미 출발/종료된 비행기라면 안보이게 차단
+                        if (!showDeparted && isCompleted) return false;
+                        
+                        // 과거 시간대(지금보다 이전)의 비정상 상태 잔류 로직 검사
+                        if (flightTimestamp < nowTimestamp) {
+                            if (showDeparted) return true; // 다 보여주기로 했으면 프리패스
+                            
+                            // 지연, 마감 등 특정 상태만 잔류
+                            if (remark.includes("지연") || remark.includes("결항") || remark.includes("마감") || remark.includes("최종") || remark.includes("탑승중") || remark.includes("준비") || remark.includes("대기")) {
+                                return true;
+                            }
+                            return false; // 이외는 숨김
                         }
+                        
+                        return true; // 미래 시간대는 무조건 노출
                     }
 
                     return false;
@@ -250,7 +273,7 @@
                     setCurrentPage(0); 
                     return processed;
                 });
-            }, [currentTime.getMinutes(), flights, showCodeshare]); 
+            }, [currentTime.getMinutes(), flights, showCodeshare, showDeparted, pastHours, futureHours]); 
 
             const pageData = filteredFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
             const totalPages = Math.min(Math.ceil(filteredFlights.length / itemsPerPage), maxPages);
@@ -309,6 +332,9 @@
                     return <div className={`${baseClass} bg-[#FF6D00] text-white`}>지연</div>;
                 } else if (status.includes("결항")) {
                     return <div className={`${baseClass} bg-[#D50000] text-white`}>결항</div>;
+                } else if (status.includes("출발") || status.includes("이륙") || status.includes("종료")) {
+                    // 🛠️ 출발/탑승종료 토글 ON 시 표시되는 다크 톤 스타일
+                    return <div className={`${baseClass} text-slate-400`}>{status}</div>;
                 }
 
                 return <div className={baseClass}></div>;
@@ -330,7 +356,6 @@
             if (displayCheckinActive) gridColsStructure += " 160px";
             gridColsStructure += " 140px 180px";
 
-            // 🛠️ 통합 높이/폰트 스타일 엔진: 모든 줄이 이 비율(0.43)과 높이를 정확히 따름
             const dynamicGridStyle = {
                 display: "grid",
                 gridTemplateColumns: gridColsStructure,
@@ -341,9 +366,9 @@
             };
 
             return (
-                <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none">
+                <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none overflow-hidden">
                     <div>
-                        {/* 🟦 1번째 줄 (헤더): 불필요한 패딩 및 보너스 높이(+10px) 제거, 폰트 비율 0.43으로 완벽 동기화 */}
+                        {/* 🟦 1번째 줄 (헤더) */}
                         <header className="relative flex items-center bg-[#458cff] shadow-md z-10 px-6" style={{ height: `${rowHeight}px` }}>
                             <div className="absolute left-6 flex items-center h-full">
                                 <svg style={{ width: `${rowHeight * 0.6}px`, height: `${rowHeight * 0.6}px` }} className="text-white" viewBox="0 0 24 24" fill="currentColor">
@@ -414,8 +439,9 @@
                                                     </div>
                                                 </div>
                                                 
+                                                {/* 🛠️ [1. 터미널 정보 텍스트 화이트 컬러 적용] */}
                                                 {displayTerminalActive && (
-                                                    <div className="text-[#4AF2A1] tracking-wide text-center flex items-center justify-center">
+                                                    <div className="text-white tracking-wide text-center flex items-center justify-center">
                                                         {getTerminalInfo(flight.gateNumber, flight.terminalId)}
                                                     </div>
                                                 )}
@@ -435,20 +461,36 @@
                                         );
                                     })
                                 ) : (
-                                    <div className="text-center py-40 text-[#458cff] text-2xl tracking-widest uppercase bg-[#134dab]/20">
-                                        실시간 비행 데이터를 불러오는 중입니다...
+                                    <div className="text-center text-[#458cff] tracking-widest uppercase bg-[#134dab]/20 flex items-center justify-center" style={{ height: `${rowHeight * 5}px`, fontSize: `${rowHeight * 0.43}px` }}>
+                                        조건에 맞는 비행 데이터가 없거나 불러오는 중입니다...
                                     </div>
                                 )}
                             </div>
                         </div>
                     </div>
 
-                    {/* 🎛️ 하단 관제 커스텀 제어 스위치 패널 통합 영역 */}
-                    <div className="flex flex-col bg-[#030b1a]/90 border-t border-[#162e58]/50 shadow-2xl transition-all duration-300">
+                    {/* 🎛️ 하단 관제 커스텀 제어 4열(Grid) 리뉴얼 패널 */}
+                    <div className="flex flex-col bg-[#030b1a]/95 border-t border-[#162e58]/50 shadow-2xl transition-all duration-300 relative z-20">
                         
                         {showConfig && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-8 py-6 bg-[#041430] text-sm text-slate-300 border-b border-[#162e58]/30">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 px-8 py-6 bg-[#041430] text-sm text-slate-300 border-b border-[#162e58]/30">
                                 
+                                {/* 1열: 시간대 윈도우 스캐너 */}
+                                <div className="flex flex-col space-y-2">
+                                    <div className="flex justify-between">
+                                        <span>과거 비행편 스캔 범위</span>
+                                        <span className="text-[#4AF2A1]">- {pastHours} 시간</span>
+                                    </div>
+                                    <input type="range" min="1" max="24" value={pastHours} onChange={(e) => setPastHours(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                    
+                                    <div className="flex justify-between pt-2">
+                                        <span>미래 비행편 노출 범위</span>
+                                        <span className="text-[#4AF2A1]">+ {futureHours} 시간</span>
+                                    </div>
+                                    <input type="range" min="1" max="24" value={futureHours} onChange={(e) => setFutureHours(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                </div>
+
+                                {/* 2열: 레이아웃 스케일러 */}
                                 <div className="flex flex-col space-y-2">
                                     <div className="flex justify-between">
                                         <span>출력 항공편 수 (줄 개수)</span>
@@ -457,54 +499,77 @@
                                     <input type="range" min="5" max="20" value={itemsPerPage} onChange={(e) => setItemsPerPage(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                     
                                     <div className="flex justify-between pt-2">
-                                        <span>최대 출력 페이지수 (제한)</span>
-                                        <span className="text-[#4AF2A1]">{maxPages} P</span>
-                                    </div>
-                                    <input type="range" min="1" max="30" value={maxPages} onChange={(e) => setMaxPages(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-
-                                <div className="flex flex-col space-y-2 justify-center">
-                                    <div className="flex justify-between">
-                                        <span>전광판 줄 높이 (폰트 자동 비례)</span>
+                                        <span>전광판 줄 높이 스케일</span>
                                         <span className="text-[#4AF2A1]">{rowHeight} px</span>
                                     </div>
                                     <input type="range" min="40" max="95" value={rowHeight} onChange={(e) => setRowHeight(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
 
-                                <div className="flex flex-col space-y-4 justify-center pl-4 border-l border-[#162e58]/50">
-                                    <span className="text-xs tracking-wider text-slate-400">화면 표시 제어 (ON/OFF 토글)</span>
+                                {/* 3열: 페이지네이션 및 타이머 */}
+                                <div className="flex flex-col space-y-2">
+                                    <div className="flex justify-between">
+                                        <span>페이지 전환 속도 (초)</span>
+                                        <span className="text-[#4AF2A1]">{flipInterval} 초</span>
+                                    </div>
+                                    <input type="range" min="5" max="60" value={flipInterval} onChange={(e) => setFlipInterval(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                    
+                                    <div className="flex justify-between pt-2">
+                                        <span>최대 생성 페이지 제한</span>
+                                        <span className="text-[#4AF2A1]">{maxPages} P</span>
+                                    </div>
+                                    <input type="range" min="1" max="30" value={maxPages} onChange={(e) => setMaxPages(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                </div>
+
+                                {/* 4열: 마스터 토글 스위치 허브 */}
+                                <div className="flex flex-col space-y-3 justify-center pl-4 border-l border-[#162e58]/50">
+                                    <span className="text-xs tracking-wider text-slate-400 font-bold mb-1">표시 항목 제어 스위치</span>
                                     
                                     <div className="flex flex-col space-y-3">
+                                        {/* 터미널 토글 */}
                                         <label className="flex items-center cursor-pointer group">
                                             <div className="relative">
                                                 <input type="checkbox" className="sr-only" checked={showTerminal} onChange={() => setShowTerminal(!showTerminal)} />
-                                                <div className={`block w-9 h-5 rounded-full transition-colors ${showTerminal ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
-                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showTerminal ? 'transform translate-x-4' : ''}`}></div>
+                                                <div className={`block w-8 h-4 rounded-full transition-colors ${showTerminal ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-3 h-3 rounded-full transition-transform ${showTerminal ? 'transform translate-x-4' : ''}`}></div>
                                             </div>
                                             <span className={`ml-3 text-xs tracking-wider transition-colors ${showTerminal ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
-                                                터미널 정보 (1500px 이상)
+                                                터미널 정보 
                                             </span>
                                         </label>
                                         
+                                        {/* 체크인 토글 */}
                                         <label className="flex items-center cursor-pointer group">
                                             <div className="relative">
                                                 <input type="checkbox" className="sr-only" checked={showCheckin} onChange={() => setShowCheckin(!showCheckin)} />
-                                                <div className={`block w-9 h-5 rounded-full transition-colors ${showCheckin ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
-                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showCheckin ? 'transform translate-x-4' : ''}`}></div>
+                                                <div className={`block w-8 h-4 rounded-full transition-colors ${showCheckin ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-3 h-3 rounded-full transition-transform ${showCheckin ? 'transform translate-x-4' : ''}`}></div>
                                             </div>
                                             <span className={`ml-3 text-xs tracking-wider transition-colors ${showCheckin ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
-                                                체크인 카운터 (1500px 이상)
+                                                체크인 카운터 
                                             </span>
                                         </label>
 
+                                        {/* 코드쉐어 토글 (내부 편입) */}
                                         <label className="flex items-center cursor-pointer group">
                                             <div className="relative">
                                                 <input type="checkbox" className="sr-only" checked={showCodeshare} onChange={() => setShowCodeshare(!showCodeshare)} />
-                                                <div className={`block w-9 h-5 rounded-full transition-colors ${showCodeshare ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
-                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform ${showCodeshare ? 'transform translate-x-4' : ''}`}></div>
+                                                <div className={`block w-8 h-4 rounded-full transition-colors ${showCodeshare ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-3 h-3 rounded-full transition-transform ${showCodeshare ? 'transform translate-x-4' : ''}`}></div>
                                             </div>
                                             <span className={`ml-3 text-xs tracking-wider transition-colors ${showCodeshare ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
-                                                코드쉐어 편명 (공동운항)
+                                                코드쉐어 병합 표기
+                                            </span>
+                                        </label>
+
+                                        {/* 출발편 표시 토글 (신규 추가) */}
+                                        <label className="flex items-center cursor-pointer group">
+                                            <div className="relative">
+                                                <input type="checkbox" className="sr-only" checked={showDeparted} onChange={() => setShowDeparted(!showDeparted)} />
+                                                <div className={`block w-8 h-4 rounded-full transition-colors ${showDeparted ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                                <div className={`dot absolute left-[2px] top-[2px] bg-white w-3 h-3 rounded-full transition-transform ${showDeparted ? 'transform translate-x-4' : ''}`}></div>
+                                            </div>
+                                            <span className={`ml-3 text-xs tracking-wider transition-colors ${showDeparted ? 'text-[#4AF2A1]' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                                                완료편(출발) 살리기
                                             </span>
                                         </label>
                                     </div>
@@ -513,18 +578,19 @@
                             </div>
                         )}
 
-                        {/* 🟦 마지막 줄 (푸터): 지정 패딩 제거 및 높이, 글자 크기 동기화 처리 완료 */}
+                        {/* 🟦 마지막 줄 (푸터) */}
                         <footer className="flex justify-between items-center px-6" style={{ height: `${rowHeight}px` }}>
                             <div className="flex items-center space-x-6 h-full">
-                                <button onClick={() => fetchFlightData(true)} className="text-[11px] text-[#458cff] hover:text-[#80aef8] focus:outline-none">
-                                    [ FLIGHT DATA SYNC ]
+                                <button onClick={() => fetchFlightData(true)} className="text-[11px] text-[#458cff] hover:text-[#80aef8] focus:outline-none tracking-widest">
+                                    [ SYNC DATA ]
                                 </button>
 
-                                <button onClick={() => setShowConfig(!showConfig)} className={`text-[11px] px-3 py-1 rounded border border-[#1b3a6d]/40 transition-colors ${showConfig ? 'bg-[#458cff] text-white border-transparent' : 'text-[#458cff] hover:bg-[#162e58]/50'}`}>
-                                    {showConfig ? "[ CUSTOM PANEL CLOSE ]" : "[ CUSTOM PANEL OPEN ]"}
+                                <button onClick={() => setShowConfig(!showConfig)} className={`text-[11px] px-3 py-1 rounded border border-[#1b3a6d]/40 transition-colors tracking-widest ${showConfig ? 'bg-[#458cff] text-white border-transparent' : 'text-[#458cff] hover:bg-[#162e58]/50'}`}>
+                                    {showConfig ? "[ PANEL CLOSE ]" : "[ CONTROL PANEL ]"}
                                 </button>
                             </div>
                             
+                            {/* PAGE 글자 완벽 크기 연동 완료 */}
                             {totalPages > 1 && (
                                 <div className="text-white tracking-widest h-full flex items-center" style={{ fontSize: `${rowHeight * 0.43}px` }}>
                                     PAGE {currentPage + 1} / {totalPages}
