@@ -92,6 +92,8 @@
 
             // 4. 색상 제어
             const [headerColor, setHeaderColor] = useState("#2f6bca");
+            const [tableHeaderColor, setTableHeaderColor] = useState("#000000");
+            const [footerColor, setFooterColor] = useState("#030b1a");
             const [oddRowColor, setOddRowColor] = useState("#3065bb"); 
             const [evenRowColor, setEvenRowColor] = useState("#1752b0"); 
 
@@ -420,7 +422,7 @@
                         </header>
 
                         <div className="w-full">
-                            <div style={dynamicGridStyle} className="bg-[#000000] border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
+                            <div style={dynamicGridStyle} style={{...dynamicGridStyle, backgroundColor: tableHeaderColor}} className="border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
                                 <div className="pl-6 flex items-center justify-center">시간</div>
                                 <div className="flex items-center justify-center">변경</div>
                                 <div className="text-center flex items-center justify-center">도착지</div>
@@ -467,8 +469,8 @@
                                                                 />
                                                             </div>
                                                         )}
-                                                        <span className={`shrink-0 text-white font-black ${showLogo ? 'w-16 text-center' : 'w-12 text-right'}`}>{fltInfo.code}</span>
-                                                        <span className="text-white pl-2 truncate text-left font-black">{fltInfo.num}</span>
+                                                        <span className="shrink-0 text-white font-black w-12 text-left">{fltInfo.code}</span>
+                                                        <span className="text-white pl-3 flex-1 text-left font-black whitespace-nowrap">{fltInfo.num}</span>
                                                     </div>
                                                 </div>
                                                 
@@ -650,6 +652,20 @@
                                     </div>
 
                                     <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-bold">테이블 헤더</span>
+                                        <div className="flex items-center space-x-2">
+                                            <input type="color" value={tableHeaderColor} onChange={(e)=>setTableHeaderColor(e.target.value)} />
+                                            <input type="text" value={tableHeaderColor} onChange={(e)=>setTableHeaderColor(e.target.value)} className="w-[60px] bg-[#051126] text-white text-[10px] font-mono text-center border border-[#162e58] rounded py-1"/>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-bold">페이지 바</span>
+                                        <div className="flex items-center space-x-2">
+                                            <input type="color" value={footerColor} onChange={(e)=>setFooterColor(e.target.value)} />
+                                            <input type="text" value={footerColor} onChange={(e)=>setFooterColor(e.target.value)} className="w-[60px] bg-[#051126] text-white text-[10px] font-mono text-center border border-[#162e58] rounded py-1"/>
+                                        </div>
+                                    </div>
+<div className="flex items-center justify-between">
                                         <span className="text-[11px] font-bold">짝수행</span>
                                         <div className="flex items-center space-x-2">
                                             <input type="color" value={evenRowColor} onChange={(e) => setEvenRowColor(e.target.value)} />
@@ -661,13 +677,13 @@
                             </div>
                         )}
 
-                        <footer className="flex justify-between items-center px-6 border-t border-[#162e58]/50" style={{ height: `${rowHeight}px` }}>
+                        <footer className="flex justify-between items-center px-6 border-t border-[#162e58]/50" style={{ height: `${rowHeight}px`, backgroundColor: footerColor }}>
                             <div className="flex items-center space-x-6 h-full">
-                                <span className="text-[11px] text-[#458cff] tracking-widest font-mono">
+                                <span className="text-[11px] text-white tracking-widest font-mono">
                                     [UPDATED {lastUpdated}]
                                 </span>
 
-                                <button onClick={() => setShowConfig(!showConfig)} className={`text-[11px] px-3 py-1 rounded border border-[#1b3a6d]/40 transition-colors tracking-widest ${showConfig ? 'bg-[#458cff] text-white border-transparent' : 'text-[#458cff] hover:bg-[#162e58]/50'}`}>
+                                <button onClick={() => setShowConfig(!showConfig)} className={`text-[11px] px-3 py-1 rounded border border-[#1b3a6d]/40 transition-colors tracking-widest ${showConfig ? 'bg-[#458cff] text-white border-transparent' : 'text-white hover:bg-[#162e58]/50'}`}>
                                     {showConfig ? "[ PANEL CLOSE ]" : "[ CONTROL PANEL ]"}
                                 </button>
                             </div>
