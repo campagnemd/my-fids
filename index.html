@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         * {
-            font-family: 'Dotum', '돋움', 'Apple SD Gothic Neo', sans-serif !important;
+            font-family: 'GulimChe', '굴림체', 'Courier New', monospace !important;
             font-weight: 900 !important;
         }
         
@@ -436,7 +436,8 @@
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
 
-            const flightColWidth = showCodeshare ? 480 : 240;
+            const singleFlightWidth = showLogo ? 150 : 100;
+            const flightColWidth = showCodeshare ? singleFlightWidth * 2 : singleFlightWidth;
             let gridColsStructure = flightFirst
                 ? `110px 110px ${flightColWidth}px minmax(220px, 1fr)`
                 : `110px 110px minmax(220px, 1fr) ${flightColWidth}px`;
@@ -513,7 +514,7 @@
 
                                         const flightCell = (
                                             <div className="flex items-center justify-start h-full w-full">
-                                                <div className={`flex items-center h-full ${showLogo ? 'w-[220px] justify-start' : 'w-[140px] justify-center'}`}>
+                                                <div className="flex items-center h-full pl-2" style={{ width: `${singleFlightWidth}px` }}>
                                                     {showLogo && (
                                                         <div className="w-14 shrink-0 flex items-center justify-start h-full py-[2px]">
                                                             <img 
@@ -525,18 +526,31 @@
                                                             />
                                                         </div>
                                                     )}
-                                                    <span className="shrink-0 text-white font-black w-12 text-left">{fltInfo.code}</span>
-                                                    <span className="text-white flex-1 text-left font-black whitespace-nowrap" style={{ marginLeft: '1ch' }}>{fltInfo.num}</span>
+                                                    <span className="shrink-0 text-white font-black text-left">{fltInfo.code}</span>
+                                                    <span className="text-white text-left font-black whitespace-nowrap" style={{ marginLeft: '1ch' }}>{fltInfo.num}</span>
                                                 </div>
 
                                                 {showCodeshare && (
-                                                    <div className="flex items-center justify-start h-full overflow-hidden" style={{ width: '240px', paddingLeft: '1ch' }}>
+                                                    <div className="flex items-center justify-start h-full pl-2 overflow-hidden" style={{ width: `${singleFlightWidth}px` }}>
                                                         {currentCodeshareInfo && (
-                                                            <span
-                                                                className={`text-white font-black whitespace-nowrap transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`}
-                                                            >
-                                                                {currentCodeshareInfo.code}<span style={{ marginLeft: '1ch' }}>{currentCodeshareInfo.num}</span>
-                                                            </span>
+                                                            <React.Fragment>
+                                                                {showLogo && (
+                                                                    <div className={`w-14 shrink-0 flex items-center justify-start h-full py-[2px] transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`}>
+                                                                        <img 
+                                                                            src={`https://images.kiwi.com/airlines/64/${getAirlineCode(currentCodeshareId)}.png`}
+                                                                            alt=""
+                                                                            onError={(e) => { e.target.style.display = 'none'; }} 
+                                                                            style={{ height: `${rowHeight * 0.88}px`, width: `${rowHeight * 0.88}px` }}
+                                                                            className="object-contain rounded-sm"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                <span
+                                                                    className={`text-white font-black whitespace-nowrap transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`}
+                                                                >
+                                                                    {currentCodeshareInfo.code}<span style={{ marginLeft: '1ch' }}>{currentCodeshareInfo.num}</span>
+                                                                </span>
+                                                            </React.Fragment>
                                                         )}
                                                     </div>
                                                 )}
