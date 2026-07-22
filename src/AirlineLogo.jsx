@@ -4,8 +4,8 @@ import { getAirline } from "./airlines";
 export default function AirlineLogo({ flightId, rowHeight, slotWidth }) {
   const airline = getAirline(flightId);
   const [imageFailed, setImageFailed] = useState(false);
-  const maxHeight = Math.max(18, rowHeight * 0.78);
-  const width = Math.max(20, Math.min(slotWidth - 8, maxHeight * (16 / 9)));
+  const maxHeight = Math.max(18, rowHeight * 0.89);
+  const width = Math.max(20, Math.min(slotWidth - 4, maxHeight * (16 / 9)));
 
   useEffect(() => {
     setImageFailed(false);
