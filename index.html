@@ -62,8 +62,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const CACHE_DURATION = 10 * 60 * 1000; 
-
         function App() {
             // 🛠️ 0. 시작 경고문구 동의 상태
             const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -204,12 +202,21 @@
                 const cachedTimeKey = `fids_raw_time_${dateStr}`;
                 const cachedData = localStorage.getItem(cacheKey);
                 const cachedTime = localStorage.getItem(cachedTimeKey);
+                const cachedTimestamp = Number(cachedTime);
                 const nowTimestamp = Date.now();
+                const cacheDuration = apiSyncInterval * 60 * 1000;
 
-                if (!forceRefresh && cachedData && cachedTime && (nowTimestamp - cachedTime < CACHE_DURATION)) {
+                if (!forceRefresh && cachedData && Number.isFinite(cachedTimestamp) && (nowTimestamp - cachedTimestamp < cacheDuration)) {
                     try {
                         const parsed = JSON.parse(cachedData);
-                        if (parsed && parsed.length > 0) return parsed;
+                        if (Array.isArray(parsed)) {
+                            return {
+                                items: parsed,
+                                networkAttempted: false,
+                                networkSucceeded: false,
+                                lastSuccessfulFetchAt: cachedTimestamp
+                            };
+                        }
                     } catch(e) {}
                 }
 
@@ -226,20 +233,36 @@
                     
                     const rawItems = data?.response?.body?.items || [];
                     const itemList = Array.isArray(rawItems) ? rawItems : [];
-                    
-                    if (itemList.length > 0) {
-                        localStorage.setItem(cacheKey, JSON.stringify(itemList));
-                        localStorage.setItem(cachedTimeKey, nowTimestamp.toString());
-                        return itemList;
-                    }
-                    return [];
+                    const successfulFetchAt = Date.now();
+
+                    localStorage.setItem(cacheKey, JSON.stringify(itemList));
+                    localStorage.setItem(cachedTimeKey, successfulFetchAt.toString());
+
+                    return {
+                        items: itemList,
+                        networkAttempted: true,
+                        networkSucceeded: true,
+                        lastSuccessfulFetchAt: successfulFetchAt
+                    };
                 } catch (err) {
                     console.error(`데이터 호출 실패 (${dateStr}):`, err);
                     try {
                         const backup = JSON.parse(cachedData);
-                        if (backup && backup.length > 0) return backup;
+                        if (Array.isArray(backup)) {
+                            return {
+                                items: backup,
+                                networkAttempted: true,
+                                networkSucceeded: false,
+                                lastSuccessfulFetchAt: Number.isFinite(cachedTimestamp) ? cachedTimestamp : null
+                            };
+                        }
                     } catch(e) {}
-                    return [];
+                    return {
+                        items: [],
+                        networkAttempted: true,
+                        networkSucceeded: false,
+                        lastSuccessfulFetchAt: null
+                    };
                 }
             };
 
@@ -257,11 +280,12 @@
                 if (futureStr !== todayStr && !targetDates.includes(futureStr)) targetDates.push(futureStr);
 
                 try {
-                    const datasets = [];
+                    const fetchResults = [];
                     for (const date of targetDates) {
-                        const data = await fetchSingleDayData(date, forceRefresh);
-                        datasets.push(data);
+                        const result = await fetchSingleDayData(date, forceRefresh);
+                        fetchResults.push(result);
                     }
+                    const datasets = fetchResults.map(result => result.items);
                     
                     const mergedItems = [];
                     const seenKeys = new Set();
@@ -299,7 +323,23 @@
                     if (mergedItems.length > 0) {
                         setFlights(mergedItems);
                     }
-                    setLastUpdated(getPureTimeString(new Date())); 
+
+                    const networkResults = fetchResults.filter(result => result.networkAttempted);
+                    const networkRefreshSucceeded = networkResults.length > 0 && networkResults.every(result => result.networkSucceeded);
+                    const latestSuccessfulFetchAt = Math.max(
+                        ...fetchResults
+                            .map(result => result.lastSuccessfulFetchAt)
+                            .filter(timestamp => Number.isFinite(timestamp))
+                    );
+
+                    if (networkRefreshSucceeded && Number.isFinite(latestSuccessfulFetchAt)) {
+                        setLastUpdated(getPureTimeString(new Date(latestSuccessfulFetchAt)));
+                    } else if (Number.isFinite(latestSuccessfulFetchAt)) {
+                        setLastUpdated(previous => previous === "--:--:--"
+                            ? getPureTimeString(new Date(latestSuccessfulFetchAt))
+                            : previous
+                        );
+                    }
                 } catch (err) {
                     console.error("데이터 병합 코어 에러:", err);
                 }
@@ -307,7 +347,7 @@
 
             useEffect(() => {
                 fetchFlightData(false);
-                const autoRefresh = setInterval(() => fetchFlightData(false), apiSyncInterval * 60 * 1000);
+                const autoRefresh = setInterval(() => fetchFlightData(true), apiSyncInterval * 60 * 1000);
                 return () => clearInterval(autoRefresh);
             }, [pastHours, futureHours, apiSyncInterval]); 
 
