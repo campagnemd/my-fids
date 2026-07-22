@@ -1,4 +1,10 @@
 .env
 .env.*
 !.env.example
-.vercel
+node_modules/
+.pnpm-store/
+dist/
+.vercel/
+.DS_Store
+npm-debug.log*
+pnpm-debug.log*
