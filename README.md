@@ -6,7 +6,10 @@
 
 - `src/App.jsx`: 전광판 화면, 데이터 조회 및 관제 패널
 - `src/settings.js`: 기본 설정과 `localStorage` 저장·검증
+- `src/airlines.js`: 인천공항 운항 항공사 IATA/ICAO 코드 및 로컬 로고 매핑
+- `src/AirlineLogo.jsx`: 16:9 로고 표시와 항공사 코드 폴백 배지
 - `src/styles.css`: Tailwind CSS와 공통 스타일
+- `public/airlines/v1`: FlightRadar24 인천공항 운항 현황에서 확인한 로컬 로고 자산
 - `api/departures.js`: 공공데이터 API 키를 보호하는 Vercel 함수
 - `vite.config.js`: React 빌드 및 레거시 브라우저 호환 설정
 
@@ -40,3 +43,9 @@ DATA_GO_KR_SERVICE_KEY=공공데이터포털_인증키
 ```
 
 환경변수는 저장소에 커밋하지 않습니다. `main` 브랜치에 푸시하면 Vercel이 Vite 프로젝트를 자동으로 빌드하고 배포합니다.
+
+## 항공사 로고
+
+로고는 인천공항 출발 API의 실제 운항사 코드와 FlightRadar24 인천공항 출발·도착 현황의 편별 로고를 대조해 로컬 PNG로 저장합니다. 전체 로고 용량은 작게 유지하고 `/airlines/v1/*`에는 1년 브라우저 캐시를 적용합니다. 로고 파일이 없거나 로드에 실패하면 항공사 코드 배지를 표시합니다.
+
+로고와 항공사 명칭의 권리는 각 항공사에 있으며, 데이터 대조 출처는 [Flightradar24 airline database](https://www.flightradar24.com/data/airlines/)입니다. 로고를 교체할 때는 캐시 무효화를 위해 `v1` 디렉터리 버전도 함께 올립니다.

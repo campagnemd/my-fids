@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_SETTINGS, loadUserSettings, saveUserSettings, clearUserSettings } from "./settings";
+import AirlineLogo from "./AirlineLogo";
 
 const getPureTimeString = (dateObj) => {
     const hh = String(dateObj.getHours()).padStart(2, "0");
@@ -475,11 +476,6 @@ function App() {
         return { code: id.toUpperCase(), num: "" };
     };
 
-    const getAirlineCode = (id) => {
-        if (!id) return "KE";
-        return id.slice(0, 2).toUpperCase();
-    };
-
     const getTerminalInfo = (gateNumber, terminalId) => {
         if (!gateNumber) return terminalId || "T1";
         const gate = parseInt(gateNumber, 10);
@@ -655,13 +651,7 @@ function App() {
                                         <div className="flex items-center h-full overflow-hidden" style={{ width: `${actualColWidth}px` }}>
                                             {showLogo && (
                                                 <div className="shrink-0 flex items-center justify-start h-full py-[2px] pl-2" style={{ width: `${scaledActualLogo}px` }}>
-                                                    <img 
-                                                        src={`https://images.kiwi.com/airlines/64/${getAirlineCode(flight.flightId)}.png`}
-                                                        alt=""
-                                                        onError={(e) => { e.target.style.display = 'none'; }} 
-                                                        style={{ height: `${rowHeight * 0.88}px`, width: 'auto', maxWidth: '100%' }}
-                                                        className="object-contain rounded-sm"
-                                                    />
+                                                    <AirlineLogo flightId={flight.flightId} rowHeight={rowHeight} slotWidth={scaledActualLogo} />
                                                 </div>
                                             )}
                                             <div className="flex items-center shrink-0 overflow-hidden pl-2" style={{ width: `${scaledActualNum}px` }}>
@@ -677,13 +667,7 @@ function App() {
                                                     <React.Fragment>
                                                         {showLogo && (
                                                             <div className={`shrink-0 flex items-center justify-start h-full py-[2px] pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${scaledCodeLogo}px` }}>
-                                                                <img 
-                                                                    src={`https://images.kiwi.com/airlines/64/${getAirlineCode(currentCodeshareId)}.png`}
-                                                                    alt=""
-                                                                    onError={(e) => { e.target.style.display = 'none'; }} 
-                                                                    style={{ height: `${rowHeight * 0.88}px`, width: 'auto', maxWidth: '100%' }}
-                                                                    className="object-contain rounded-sm"
-                                                                />
+                                                                <AirlineLogo flightId={currentCodeshareId} rowHeight={rowHeight} slotWidth={scaledCodeLogo} />
                                                             </div>
                                                         )}
                                                         <div className={`flex items-center shrink-0 overflow-hidden pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${scaledCodeNum}px` }}>
