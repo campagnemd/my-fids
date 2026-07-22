@@ -62,7 +62,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const SERVICE_KEY = "ca528dec987f974b71365a40543ca4c094fa0a3afe15441db4136e49edc7c72c";
         const CACHE_DURATION = 10 * 60 * 1000; 
 
         function App() {
@@ -216,15 +215,9 @@
 
                 try {
                     const params = new URLSearchParams({
-                        serviceKey: SERVICE_KEY,
-                        type: 'json',
-                        numOfRows: '1500', 
-                        pageNo: '1',
-                        searchDate: dateStr,     
-                        searchdtCode: 'S',        
-                        passengerOrCargo: 'P'     
+                        searchDate: dateStr
                     });
-                    const targetUrl = `/api/icn/B551177/statusOfAllFltDeOdp/getFltDeparturesDeOdp?${params.toString()}`;
+                    const targetUrl = `/api/departures?${params.toString()}`;
                     const response = await fetch(targetUrl);
                     if (!response.ok) throw new Error("API Network Error");
                     
