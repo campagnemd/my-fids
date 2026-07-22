@@ -12,7 +12,7 @@
 
 ## 로컬 개발
 
-Node.js 20.19 이상과 pnpm을 사용합니다.
+Node.js 22와 pnpm을 사용합니다.
 
 ```bash
 pnpm install
