@@ -62,7 +62,108 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        const SETTINGS_STORAGE_KEY = "fids_user_settings_v1";
+        const DEFAULT_SETTINGS = Object.freeze({
+            itemsPerPage: 11,
+            rowHeight: 55,
+            pastHours: 6,
+            futureHours: 6,
+            apiSyncInterval: 10,
+            flipInterval: 10,
+            maxPages: 10,
+            smoothTransition: false,
+            showLogo: true,
+            showTerminal: false,
+            showCheckin: false,
+            showCodeshare: false,
+            showDeparted: false,
+            showHeader: false,
+            flightFirst: true,
+            highlightChange: true,
+            highlightTerminal: false,
+            highlightCheckin: true,
+            highlightGate: true,
+            codeshareFlipInterval: 2,
+            headerColor: "#2f6bca",
+            tableHeaderColor: "#000000",
+            footerColor: "#030b1a",
+            oddRowColor: "#3065bb",
+            evenRowColor: "#1752b0",
+            wTime: 110,
+            wChange: 110,
+            wActualLogo: 60,
+            wActualNum: 90,
+            wCodeLogo: 60,
+            wCodeNum: 90,
+            wDest: 0,
+            wTerminal: 110,
+            wCheckin: 160,
+            wGate: 140,
+            wStatus: 180
+        });
+
+        const NUMBER_LIMITS = {
+            itemsPerPage: [5, 20],
+            rowHeight: [40, 95],
+            pastHours: [1, 24],
+            futureHours: [1, 24],
+            apiSyncInterval: [5, 30],
+            flipInterval: [5, 60],
+            maxPages: [1, 30],
+            codeshareFlipInterval: [1, 10],
+            wTime: [30, 300],
+            wChange: [30, 300],
+            wActualLogo: [20, 150],
+            wActualNum: [30, 300],
+            wCodeLogo: [20, 150],
+            wCodeNum: [30, 300],
+            wDest: [0, 800],
+            wTerminal: [30, 300],
+            wCheckin: [30, 400],
+            wGate: [30, 300],
+            wStatus: [30, 400]
+        };
+
+        const loadUserSettings = () => {
+            try {
+                const saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY));
+                if (!saved || typeof saved !== "object" || Array.isArray(saved)) {
+                    return { ...DEFAULT_SETTINGS };
+                }
+
+                return Object.fromEntries(
+                    Object.entries(DEFAULT_SETTINGS).map(([key, defaultValue]) => {
+                        const savedValue = saved[key];
+
+                        if (typeof defaultValue === "number") {
+                            if (!Number.isFinite(savedValue)) return [key, defaultValue];
+                            const [min, max] = NUMBER_LIMITS[key];
+                            return [key, Math.min(max, Math.max(min, Math.round(savedValue)))];
+                        }
+
+                        if (typeof defaultValue === "boolean") {
+                            return [key, typeof savedValue === "boolean" ? savedValue : defaultValue];
+                        }
+
+                        if (key.endsWith("Color")) {
+                            return [key, typeof savedValue === "string" && /^#[0-9a-f]{6}$/i.test(savedValue)
+                                ? savedValue
+                                : defaultValue
+                            ];
+                        }
+
+                        return [key, typeof savedValue === typeof defaultValue ? savedValue : defaultValue];
+                    })
+                );
+            } catch (error) {
+                console.warn("저장된 사용자 설정을 불러오지 못했습니다:", error);
+                return { ...DEFAULT_SETTINGS };
+            }
+        };
+
         function App() {
+            const [initialSettings] = useState(loadUserSettings);
+
             // 🛠️ 0. 시작 경고문구 동의 상태
             const [showDisclaimer, setShowDisclaimer] = useState(true);
 
@@ -75,57 +176,153 @@
             const [lastUpdated, setLastUpdated] = useState("--:--:--");
             
             // 1. 디스플레이 제어
-            const [itemsPerPage, setItemsPerPage] = useState(11); 
-            const [rowHeight, setRowHeight] = useState(55);       
+            const [itemsPerPage, setItemsPerPage] = useState(initialSettings.itemsPerPage);
+            const [rowHeight, setRowHeight] = useState(initialSettings.rowHeight);
             
             // 2. 시간/타이머/페이드 제어
-            const [pastHours, setPastHours] = useState(6);        
-            const [futureHours, setFutureHours] = useState(6);    
-            const [apiSyncInterval, setApiSyncInterval] = useState(10); 
-            const [flipInterval, setFlipInterval] = useState(10); 
-            const [maxPages, setMaxPages] = useState(10);         
-            const [smoothTransition, setSmoothTransition] = useState(false); 
+            const [pastHours, setPastHours] = useState(initialSettings.pastHours);
+            const [futureHours, setFutureHours] = useState(initialSettings.futureHours);
+            const [apiSyncInterval, setApiSyncInterval] = useState(initialSettings.apiSyncInterval);
+            const [flipInterval, setFlipInterval] = useState(initialSettings.flipInterval);
+            const [maxPages, setMaxPages] = useState(initialSettings.maxPages);
+            const [smoothTransition, setSmoothTransition] = useState(initialSettings.smoothTransition);
             const [isFading, setIsFading] = useState(false); 
             
             // 3. 항목 토글 제어
-            const [showLogo, setShowLogo] = useState(true); 
-            const [showTerminal, setShowTerminal] = useState(false); 
-            const [showCheckin, setShowCheckin] = useState(false); 
-            const [showCodeshare, setShowCodeshare] = useState(false);
-            const [showDeparted, setShowDeparted] = useState(false); 
-            const [showHeader, setShowHeader] = useState(false); 
-            const [flightFirst, setFlightFirst] = useState(true); 
+            const [showLogo, setShowLogo] = useState(initialSettings.showLogo);
+            const [showTerminal, setShowTerminal] = useState(initialSettings.showTerminal);
+            const [showCheckin, setShowCheckin] = useState(initialSettings.showCheckin);
+            const [showCodeshare, setShowCodeshare] = useState(initialSettings.showCodeshare);
+            const [showDeparted, setShowDeparted] = useState(initialSettings.showDeparted);
+            const [showHeader, setShowHeader] = useState(initialSettings.showHeader);
+            const [flightFirst, setFlightFirst] = useState(initialSettings.flightFirst);
 
             // 3-1. 색상 강조 토글
-            const [highlightChange, setHighlightChange] = useState(true); 
-            const [highlightTerminal, setHighlightTerminal] = useState(false); 
-            const [highlightCheckin, setHighlightCheckin] = useState(true); 
-            const [highlightGate, setHighlightGate] = useState(true); 
+            const [highlightChange, setHighlightChange] = useState(initialSettings.highlightChange);
+            const [highlightTerminal, setHighlightTerminal] = useState(initialSettings.highlightTerminal);
+            const [highlightCheckin, setHighlightCheckin] = useState(initialSettings.highlightCheckin);
+            const [highlightGate, setHighlightGate] = useState(initialSettings.highlightGate);
 
             // 3-2. 코드쉐어 회전 간격 (초)
-            const [codeshareFlipInterval, setCodeshareFlipInterval] = useState(2); 
+            const [codeshareFlipInterval, setCodeshareFlipInterval] = useState(initialSettings.codeshareFlipInterval);
             const [codeshareIndex, setCodeshareIndex] = useState(0); 
             const [isCodeshareFading, setIsCodeshareFading] = useState(false); 
 
             // 4. 색상 제어
-            const [headerColor, setHeaderColor] = useState("#2f6bca");
-            const [tableHeaderColor, setTableHeaderColor] = useState("#000000");
-            const [footerColor, setFooterColor] = useState("#030b1a");
-            const [oddRowColor, setOddRowColor] = useState("#3065bb"); 
-            const [evenRowColor, setEvenRowColor] = useState("#1752b0"); 
+            const [headerColor, setHeaderColor] = useState(initialSettings.headerColor);
+            const [tableHeaderColor, setTableHeaderColor] = useState(initialSettings.tableHeaderColor);
+            const [footerColor, setFooterColor] = useState(initialSettings.footerColor);
+            const [oddRowColor, setOddRowColor] = useState(initialSettings.oddRowColor);
+            const [evenRowColor, setEvenRowColor] = useState(initialSettings.evenRowColor);
 
             // 5. 각 열 가로 비율/너비 제어
-            const [wTime, setWTime] = useState(110);
-            const [wChange, setWChange] = useState(110);
-            const [wActualLogo, setWActualLogo] = useState(60);
-            const [wActualNum, setWActualNum] = useState(90);
-            const [wCodeLogo, setWCodeLogo] = useState(60);
-            const [wCodeNum, setWCodeNum] = useState(90);
-            const [wDest, setWDest] = useState(0);
-            const [wTerminal, setWTerminal] = useState(110);
-            const [wCheckin, setWCheckin] = useState(160);
-            const [wGate, setWGate] = useState(140);
-            const [wStatus, setWStatus] = useState(180);
+            const [wTime, setWTime] = useState(initialSettings.wTime);
+            const [wChange, setWChange] = useState(initialSettings.wChange);
+            const [wActualLogo, setWActualLogo] = useState(initialSettings.wActualLogo);
+            const [wActualNum, setWActualNum] = useState(initialSettings.wActualNum);
+            const [wCodeLogo, setWCodeLogo] = useState(initialSettings.wCodeLogo);
+            const [wCodeNum, setWCodeNum] = useState(initialSettings.wCodeNum);
+            const [wDest, setWDest] = useState(initialSettings.wDest);
+            const [wTerminal, setWTerminal] = useState(initialSettings.wTerminal);
+            const [wCheckin, setWCheckin] = useState(initialSettings.wCheckin);
+            const [wGate, setWGate] = useState(initialSettings.wGate);
+            const [wStatus, setWStatus] = useState(initialSettings.wStatus);
+
+            useEffect(() => {
+                try {
+                    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
+                        itemsPerPage,
+                        rowHeight,
+                        pastHours,
+                        futureHours,
+                        apiSyncInterval,
+                        flipInterval,
+                        maxPages,
+                        smoothTransition,
+                        showLogo,
+                        showTerminal,
+                        showCheckin,
+                        showCodeshare,
+                        showDeparted,
+                        showHeader,
+                        flightFirst,
+                        highlightChange,
+                        highlightTerminal,
+                        highlightCheckin,
+                        highlightGate,
+                        codeshareFlipInterval,
+                        headerColor,
+                        tableHeaderColor,
+                        footerColor,
+                        oddRowColor,
+                        evenRowColor,
+                        wTime,
+                        wChange,
+                        wActualLogo,
+                        wActualNum,
+                        wCodeLogo,
+                        wCodeNum,
+                        wDest,
+                        wTerminal,
+                        wCheckin,
+                        wGate,
+                        wStatus
+                    }));
+                } catch (error) {
+                    console.error("사용자 설정을 저장하지 못했습니다:", error);
+                }
+            }, [
+                itemsPerPage, rowHeight, pastHours, futureHours, apiSyncInterval,
+                flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
+                showCheckin, showCodeshare, showDeparted, showHeader, flightFirst,
+                highlightChange, highlightTerminal, highlightCheckin, highlightGate,
+                codeshareFlipInterval, headerColor, tableHeaderColor, footerColor,
+                oddRowColor, evenRowColor, wTime, wChange, wActualLogo, wActualNum,
+                wCodeLogo, wCodeNum, wDest, wTerminal, wCheckin, wGate, wStatus
+            ]);
+
+            const resetUserSettings = () => {
+                if (!window.confirm("모든 화면 설정을 기본값으로 초기화하시겠습니까?")) return;
+
+                localStorage.removeItem(SETTINGS_STORAGE_KEY);
+                setItemsPerPage(DEFAULT_SETTINGS.itemsPerPage);
+                setRowHeight(DEFAULT_SETTINGS.rowHeight);
+                setPastHours(DEFAULT_SETTINGS.pastHours);
+                setFutureHours(DEFAULT_SETTINGS.futureHours);
+                setApiSyncInterval(DEFAULT_SETTINGS.apiSyncInterval);
+                setFlipInterval(DEFAULT_SETTINGS.flipInterval);
+                setMaxPages(DEFAULT_SETTINGS.maxPages);
+                setSmoothTransition(DEFAULT_SETTINGS.smoothTransition);
+                setShowLogo(DEFAULT_SETTINGS.showLogo);
+                setShowTerminal(DEFAULT_SETTINGS.showTerminal);
+                setShowCheckin(DEFAULT_SETTINGS.showCheckin);
+                setShowCodeshare(DEFAULT_SETTINGS.showCodeshare);
+                setShowDeparted(DEFAULT_SETTINGS.showDeparted);
+                setShowHeader(DEFAULT_SETTINGS.showHeader);
+                setFlightFirst(DEFAULT_SETTINGS.flightFirst);
+                setHighlightChange(DEFAULT_SETTINGS.highlightChange);
+                setHighlightTerminal(DEFAULT_SETTINGS.highlightTerminal);
+                setHighlightCheckin(DEFAULT_SETTINGS.highlightCheckin);
+                setHighlightGate(DEFAULT_SETTINGS.highlightGate);
+                setCodeshareFlipInterval(DEFAULT_SETTINGS.codeshareFlipInterval);
+                setHeaderColor(DEFAULT_SETTINGS.headerColor);
+                setTableHeaderColor(DEFAULT_SETTINGS.tableHeaderColor);
+                setFooterColor(DEFAULT_SETTINGS.footerColor);
+                setOddRowColor(DEFAULT_SETTINGS.oddRowColor);
+                setEvenRowColor(DEFAULT_SETTINGS.evenRowColor);
+                setWTime(DEFAULT_SETTINGS.wTime);
+                setWChange(DEFAULT_SETTINGS.wChange);
+                setWActualLogo(DEFAULT_SETTINGS.wActualLogo);
+                setWActualNum(DEFAULT_SETTINGS.wActualNum);
+                setWCodeLogo(DEFAULT_SETTINGS.wCodeLogo);
+                setWCodeNum(DEFAULT_SETTINGS.wCodeNum);
+                setWDest(DEFAULT_SETTINGS.wDest);
+                setWTerminal(DEFAULT_SETTINGS.wTerminal);
+                setWCheckin(DEFAULT_SETTINGS.wCheckin);
+                setWGate(DEFAULT_SETTINGS.wGate);
+                setWStatus(DEFAULT_SETTINGS.wStatus);
+                setCurrentPage(0);
+            };
 
             const filteredFlightsRef = useRef([]);
             useEffect(() => {
@@ -984,6 +1181,19 @@
                                             <input type="range" min="30" max="400" value={wStatus} onChange={(e) => setWStatus(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                         </div>
                                     </div>
+                                </div>
+
+                                <div className="mt-6 border-t border-[#162e58]/50 pt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <span className="text-[11px] text-slate-400 tracking-wide">
+                                        설정은 이 브라우저에 자동 저장됩니다.
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={resetUserSettings}
+                                        className="self-start sm:self-auto text-[11px] px-4 py-2 rounded border border-[#D50000]/60 text-[#FF8A80] hover:bg-[#D50000]/20 transition-colors tracking-widest"
+                                    >
+                                        [ 모든 설정 초기화 ]
+                                    </button>
                                 </div>
 
                             </div>
