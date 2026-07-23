@@ -22,6 +22,10 @@ const getFormattedDate = (dateObj) => {
     return `${year}${month}${day}`;
 };
 
+const formatAirportName = (airport) => (
+    typeof airport === "string" ? airport.trim().replace(/\s*\/\s*/g, "/") : airport
+);
+
 function AccordionSection({ id, title, summary, isOpen, onToggle, children }) {
     const panelId = `settings-panel-${id}`;
 
@@ -668,7 +672,7 @@ function App() {
 
                                 const destinationCell = (
                                     <div className="text-left pl-14 text-[#FFFFFF] truncate tracking-wide flex items-center">
-                                        {flight.airport || "---"}
+                                        {formatAirportName(flight.airport) || "---"}
                                     </div>
                                 );
 
