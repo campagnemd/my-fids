@@ -639,14 +639,15 @@ function App() {
                         </h2>
                         <div className="space-y-4 text-sm leading-relaxed mb-8 font-sans font-normal tracking-wide">
                             <p>
-                                본 웹페이지는 <strong className="text-white">인천국제공항에서 공식적으로 제공하는 서비스가 아니며</strong>, 
-                                아마추어 개발자가 공공데이터포털의 Open API를 활용하여 제작한 개인용 비상업적 웹 애플리케이션입니다.
+                                본 서비스는 <strong className="text-white">인천국제공항의 공식 서비스가 아니며</strong>,
+                                공공데이터포털 Open API를 활용한 비상업적 웹 애플리케이션입니다.
                             </p>
                             <p>
-                                서비스는 누구나 무료로 이용하실 수 있으나, 네트워크 상태나 API 제공처의 사정에 따라 실시간 데이터의 지연, 누락 및 오류가 발생할 수 있습니다. 
-                                따라서 본 서비스에 표시된 잘못된 정보나 오류로 인해 발생하는 어떠한 직·간접적 손해나 불이익에 대해서도 
-                                <strong className="text-white"> 개발자는 법적 책임을 지지 않으며 보상하지 않습니다.</strong> 
-                                실제 정확한 항공편 현황은 반드시 해당 항공사나 공항을 통해 다시 한번 확인하시기 바랍니다.
+                                표시되는 정보는 네트워크 및 데이터 제공처의 상황에 따라 지연·누락되거나 실제 운항 정보와 다를 수 있습니다.
+                                중요한 일정은 반드시 해당 항공사 또는 인천국제공항의 공식 채널에서 확인해 주세요.
+                            </p>
+                            <p>
+                                본 서비스의 정보 이용으로 발생한 손해에 대해서 개발자는 책임을 지지 않습니다.
                             </p>
                             <div className="mt-4 p-4 bg-[#162e58]/30 rounded-lg border border-[#162e58]/50">
                                 <span className="text-[#4AF2A1] font-bold">💡 이용 팁</span>
@@ -660,7 +661,7 @@ function App() {
                             onClick={() => setShowDisclaimer(false)} 
                             className="w-full bg-[#3065bb] hover:bg-[#458cff] text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 font-sans tracking-widest text-lg"
                         >
-                            동의하고 시작하기 (Agree & Start)
+                            동의
                         </button>
                     </div>
                 </div>
