@@ -3,6 +3,7 @@ export const SETTINGS_STORAGE_KEY = "fids_user_settings_v1";
 export const DEFAULT_SETTINGS = Object.freeze({
   itemsPerPage: 11,
   rowHeight: 55,
+  fontSize: 24,
   pastHours: 6,
   futureHours: 6,
   apiSyncInterval: 10,
@@ -42,6 +43,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 const NUMBER_LIMITS = {
   itemsPerPage: [5, 20],
   rowHeight: [40, 95],
+  fontSize: [14, 48],
   pastHours: [1, 24],
   futureHours: [1, 24],
   apiSyncInterval: [5, 30],

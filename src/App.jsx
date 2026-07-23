@@ -2,13 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_SETTINGS, loadUserSettings, saveUserSettings, clearUserSettings } from "./settings";
 import AirlineLogo from "./AirlineLogo";
 
-const getPureTimeString = (dateObj) => {
-    const hh = String(dateObj.getHours()).padStart(2, "0");
-    const mm = String(dateObj.getMinutes()).padStart(2, "0");
-    const ss = String(dateObj.getSeconds()).padStart(2, "0");
-    return `${hh}:${mm}:${ss}`;
-};
-
 const getShortTimeString = (dateObj) => {
     const hh = String(dateObj.getHours()).padStart(2, "0");
     const mm = String(dateObj.getMinutes()).padStart(2, "0");
@@ -27,13 +20,13 @@ const formatAirportName = (airport) => (
 );
 
 const SETTINGS_CATEGORIES = [
-    { id: "time", title: "시간 및 동기화", description: "조회 범위와 API 갱신" },
-    { id: "size", title: "화면 크기", description: "행 개수와 표시 크기" },
-    { id: "pages", title: "페이지 전환", description: "전환 속도와 페이지 수" },
-    { id: "visibility", title: "표시 항목", description: "화면에 표시할 정보" },
-    { id: "colors", title: "화면 색상", description: "영역별 배경 색상" },
-    { id: "highlight", title: "정보 강조", description: "주요 정보 강조 표시" },
-    { id: "widths", title: "열 너비", description: "항목별 가로 너비" }
+    { id: "time", title: "시간 및 동기화" },
+    { id: "size", title: "화면 크기" },
+    { id: "pages", title: "페이지 전환" },
+    { id: "visibility", title: "표시 항목" },
+    { id: "colors", title: "화면 색상" },
+    { id: "highlight", title: "정보 강조" },
+    { id: "widths", title: "열 너비" }
 ];
 
 function SettingsSection({ id, title, summary, isOpen, children }) {
@@ -67,11 +60,13 @@ function App() {
 
     const [showConfig, setShowConfig] = useState(false);
     const [openConfigSection, setOpenConfigSection] = useState("time");
-    const [lastUpdated, setLastUpdated] = useState("--:--:--");
+    const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+    const [showApiError, setShowApiError] = useState(false);
     
     // 1. 디스플레이 제어
     const [itemsPerPage, setItemsPerPage] = useState(initialSettings.itemsPerPage);
     const [rowHeight, setRowHeight] = useState(initialSettings.rowHeight);
+    const [fontSize, setFontSize] = useState(initialSettings.fontSize);
     
     // 2. 시간/타이머/페이드 제어
     const [pastHours, setPastHours] = useState(initialSettings.pastHours);
@@ -126,6 +121,7 @@ function App() {
         saveUserSettings({
             itemsPerPage,
             rowHeight,
+            fontSize,
             pastHours,
             futureHours,
             apiSyncInterval,
@@ -162,7 +158,7 @@ function App() {
             wStatus
         });
     }, [
-        itemsPerPage, rowHeight, pastHours, futureHours, apiSyncInterval,
+        itemsPerPage, rowHeight, fontSize, pastHours, futureHours, apiSyncInterval,
         flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
         showCheckin, showCodeshare, showDeparted, showHeader, flightFirst,
         highlightChange, highlightTerminal, highlightCheckin, highlightGate,
@@ -177,6 +173,7 @@ function App() {
         clearUserSettings();
         setItemsPerPage(DEFAULT_SETTINGS.itemsPerPage);
         setRowHeight(DEFAULT_SETTINGS.rowHeight);
+        setFontSize(DEFAULT_SETTINGS.fontSize);
         setPastHours(DEFAULT_SETTINGS.pastHours);
         setFutureHours(DEFAULT_SETTINGS.futureHours);
         setApiSyncInterval(DEFAULT_SETTINGS.apiSyncInterval);
@@ -215,6 +212,7 @@ function App() {
     };
 
     const filteredFlightsRef = useRef([]);
+    const apiRetryTimerRef = useRef(null);
     useEffect(() => {
         filteredFlightsRef.current = filteredFlights;
     }, [filteredFlights]);
@@ -344,7 +342,20 @@ function App() {
         }
     }, [apiSyncInterval]);
 
-    const fetchFlightData = useCallback(async (forceRefresh = false) => {
+    const fetchFlightData = useCallback(async function refreshFlightData(forceRefresh = false, isRetry = false) {
+        const handleRefreshFailure = () => {
+            if (isRetry) {
+                setShowApiError(true);
+                return;
+            }
+
+            if (apiRetryTimerRef.current) return;
+            apiRetryTimerRef.current = window.setTimeout(() => {
+                apiRetryTimerRef.current = null;
+                refreshFlightData(true, true);
+            }, 60 * 1000);
+        };
+
         const now = new Date();
         const pastDate = new Date(now.getTime() - (pastHours * 60 * 60 * 1000));
         const futureDate = new Date(now.getTime() + (futureHours * 60 * 60 * 1000));
@@ -411,22 +422,35 @@ function App() {
             );
 
             if (networkRefreshSucceeded && Number.isFinite(latestSuccessfulFetchAt)) {
-                setLastUpdated(getPureTimeString(new Date(latestSuccessfulFetchAt)));
+                if (apiRetryTimerRef.current) {
+                    window.clearTimeout(apiRetryTimerRef.current);
+                    apiRetryTimerRef.current = null;
+                }
+                setLastUpdatedAt(latestSuccessfulFetchAt);
+                setShowApiError(false);
             } else if (Number.isFinite(latestSuccessfulFetchAt)) {
-                setLastUpdated(previous => previous === "--:--:--"
-                    ? getPureTimeString(new Date(latestSuccessfulFetchAt))
-                    : previous
-                );
+                setLastUpdatedAt(previous => Number.isFinite(previous) ? previous : latestSuccessfulFetchAt);
+            }
+
+            if (networkResults.length > 0 && !networkRefreshSucceeded) {
+                handleRefreshFailure();
             }
         } catch (err) {
             console.error("데이터 병합 코어 에러:", err);
+            handleRefreshFailure();
         }
     }, [fetchSingleDayData, futureHours, pastHours]);
 
     useEffect(() => {
         fetchFlightData(false);
         const autoRefresh = setInterval(() => fetchFlightData(true), apiSyncInterval * 60 * 1000);
-        return () => clearInterval(autoRefresh);
+        return () => {
+            clearInterval(autoRefresh);
+            if (apiRetryTimerRef.current) {
+                clearTimeout(apiRetryTimerRef.current);
+                apiRetryTimerRef.current = null;
+            }
+        };
     }, [fetchFlightData, apiSyncInterval]);
 
     const currentMinute = Math.floor(currentTime.getTime() / 60000);
@@ -590,9 +614,17 @@ function App() {
         gridTemplateColumns: gridColsStructure,
         alignItems: "stretch", 
         height: `${rowHeight}px`,
-        fontSize: `${rowHeight * 0.43}px`,
+        fontSize: `${fontSize}px`,
         lineHeight: `${rowHeight}px`
     };
+    const minutesSinceLastUpdate = Number.isFinite(lastUpdatedAt)
+        ? Math.max(0, Math.floor((currentTime.getTime() - lastUpdatedAt) / 60000))
+        : null;
+    const lastUpdateLabel = minutesSinceLastUpdate === null
+        ? "업데이트 기록 없음"
+        : minutesSinceLastUpdate === 0
+            ? "방금 전"
+            : `${minutesSinceLastUpdate}분 전`;
 
     return (
         <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none overflow-hidden relative">
@@ -634,6 +666,28 @@ function App() {
                 </div>
             )}
 
+            {!showDisclaimer && showApiError && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
+                    <div role="alertdialog" aria-modal="true" aria-labelledby="api-error-title" className="w-full max-w-md rounded-xl border border-[#D50000]/60 bg-[#030b1a] p-6 text-slate-300 shadow-2xl">
+                        <h2 id="api-error-title" className="text-xl tracking-wide text-white">
+                            <span className="mr-2 text-[#FF6D00]" aria-hidden="true">⚠️</span>
+                            데이터 업데이트 실패
+                        </h2>
+                        <p className="mt-4 text-sm leading-relaxed tracking-wide">
+                            항공편 데이터를 불러오지 못해 1분 후 다시 시도했지만 연결에 실패했습니다.
+                            현재 화면에는 마지막으로 저장된 데이터가 계속 표시될 수 있습니다.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setShowApiError(false)}
+                            className="mt-6 w-full rounded-lg bg-[#3065bb] px-4 py-3 text-white hover:bg-[#458cff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AF2A1]"
+                        >
+                            확인
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div>
                 {showHeader && (
                     <header className="relative flex items-center shadow-md z-10 px-6 transition-colors duration-300" style={{ height: `${rowHeight}px`, backgroundColor: headerColor }}>
@@ -642,7 +696,7 @@ function App() {
                         </div>
 
                         <div className="w-full text-center h-full flex items-center justify-center">
-                            <span className="text-white tracking-wide" style={{ fontSize: `${rowHeight * 0.43}px` }}>
+                            <span className="text-white tracking-wide" style={{ fontSize: `${fontSize}px` }}>
                                 출발 Departures
                             </span>
                         </div>
@@ -767,7 +821,7 @@ function App() {
                                 );
                             })
                         ) : (
-                            <div className={`text-center text-[#458cff] tracking-widest uppercase bg-[#134dab]/20 flex items-center justify-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`} style={{ height: `${rowHeight * 5}px`, fontSize: `${rowHeight * 0.43}px`, backgroundColor: oddRowColor }}>
+                            <div className={`text-center text-[#458cff] tracking-widest uppercase bg-[#134dab]/20 flex items-center justify-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`} style={{ height: `${rowHeight * 5}px`, fontSize: `${fontSize}px`, backgroundColor: oddRowColor }}>
                                 <span>조건에 맞는 비행 데이터가 없거나 불러오는 중입니다...</span>
                             </div>
                         )}
@@ -791,10 +845,7 @@ function App() {
                     >
                         <div className="flex items-center justify-between border-b border-[#162e58] px-5 py-4 sm:px-7">
                             <div>
-                                <div className="flex items-center gap-3">
-                                    <h2 id="settings-dialog-title" className="text-base tracking-[0.18em] text-white">화면 설정</h2>
-                                    <span className="hidden text-[10px] tracking-wide text-[#4AF2A1] sm:inline">자동 저장</span>
-                                </div>
+                                <h2 id="settings-dialog-title" className="text-base tracking-[0.18em] text-white">화면 설정</h2>
                                 <p className="mt-1 text-[10px] tracking-wide text-slate-400">왼쪽에서 설정할 범주를 선택하세요.</p>
                             </div>
                             <button
@@ -808,7 +859,7 @@ function App() {
                         </div>
 
                         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                            <nav aria-label="화면 설정 범주" className="shrink-0 border-b border-[#162e58] bg-[#041027] p-3 md:w-64 md:border-b-0 md:border-r md:p-4">
+                            <nav aria-label="화면 설정 범주" className="flex shrink-0 flex-col border-b border-[#162e58] bg-[#041027] p-3 md:w-64 md:border-b-0 md:border-r md:p-4">
                                 <div className="flex gap-2 overflow-x-auto md:flex-col md:overflow-visible">
                                     {SETTINGS_CATEGORIES.map((category) => {
                                         const isSelected = openConfigSection === category.id;
@@ -825,11 +876,17 @@ function App() {
                                                 }`}
                                             >
                                                 <span className="block text-[12px] tracking-wider">{category.title}</span>
-                                                <span className="mt-1 hidden text-[9px] tracking-wide text-slate-500 md:block">{category.description}</span>
                                             </button>
                                         );
                                     })}
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={resetUserSettings}
+                                    className="mt-3 shrink-0 border border-[#D50000]/60 px-4 py-3 text-left text-[11px] tracking-wider text-[#FF8A80] hover:bg-[#D50000]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF8A80] md:mt-auto"
+                                >
+                                    모든 설정 초기화
+                                </button>
                             </nav>
 
                             <div className="min-h-0 flex-1 overflow-y-auto bg-[#041430] px-4 py-5 text-sm text-slate-300 sm:px-7 sm:py-6">
@@ -841,39 +898,43 @@ function App() {
                                 summary={`과거 ${pastHours}시간 · 미래 ${futureHours}시간 · ${apiSyncInterval}분마다 갱신`}
                                 isOpen={openConfigSection === "time"}
                             >
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <div>
-                                    <div className="flex justify-between">
-                                        <span>과거 스캔 범위</span>
-                                        <span className="text-[#4AF2A1]">- {pastHours} 시간</span>
-                                    </div>
-                                    <input type="range" min="1" max="24" value={pastHours} onChange={(e) => setPastHours(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                <div className="mb-5 flex items-center justify-between rounded border border-[#162e58] bg-[#051126]/70 px-4 py-3">
+                                    <span className="text-[11px] tracking-wide text-slate-400">마지막 데이터 업데이트</span>
+                                    <span className="text-[12px] tracking-wider text-[#4AF2A1]">{lastUpdateLabel}</span>
                                 </div>
-                                <div>
-                                    <div className="flex justify-between">
-                                        <span>미래 스캔 범위</span>
-                                        <span className="text-[#4AF2A1]">+ {futureHours} 시간</span>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                    <div>
+                                        <div className="flex justify-between">
+                                            <span>과거 스캔 범위</span>
+                                            <span className="text-[#4AF2A1]">- {pastHours} 시간</span>
+                                        </div>
+                                        <input type="range" min="1" max="24" value={pastHours} onChange={(e) => setPastHours(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                     </div>
-                                    <input type="range" min="1" max="24" value={futureHours} onChange={(e) => setFutureHours(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between">
-                                        <span>API 갱신 주기</span>
-                                        <span className="text-[#4AF2A1]">{apiSyncInterval} 분</span>
+                                    <div>
+                                        <div className="flex justify-between">
+                                            <span>미래 스캔 범위</span>
+                                            <span className="text-[#4AF2A1]">+ {futureHours} 시간</span>
+                                        </div>
+                                        <input type="range" min="1" max="24" value={futureHours} onChange={(e) => setFutureHours(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                     </div>
-                                    <input type="range" min="5" max="30" value={apiSyncInterval} onChange={(e) => setApiSyncInterval(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                    <div>
+                                        <div className="flex justify-between">
+                                            <span>API 갱신 주기</span>
+                                            <span className="text-[#4AF2A1]">{apiSyncInterval} 분</span>
+                                        </div>
+                                        <input type="range" min="5" max="30" value={apiSyncInterval} onChange={(e) => setApiSyncInterval(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                    </div>
                                 </div>
-                            </div>
                             </SettingsSection>
 
                             {/* 2열: 레이아웃 크기 */}
                             <SettingsSection
                                 id="size"
                                 title="화면 크기"
-                                summary={`${itemsPerPage}행 · 행 높이 ${rowHeight}px`}
+                                summary={`${itemsPerPage}행 · 행 높이 ${rowHeight}px · 글자 ${fontSize}px`}
                                 isOpen={openConfigSection === "size"}
                             >
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <div>
                                     <div className="flex justify-between">
                                         <span>페이지당 줄 개수</span>
@@ -883,10 +944,17 @@ function App() {
                                 </div>
                                 <div>
                                     <div className="flex justify-between">
-                                        <span>확대/축소</span>
-                                        <span className="text-[#4AF2A1]">{rowHeight}</span>
+                                        <span>행 높이</span>
+                                        <span className="text-[#4AF2A1]">{rowHeight}px</span>
                                     </div>
                                     <input type="range" min="40" max="95" value={rowHeight} onChange={(e) => setRowHeight(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between">
+                                        <span>글자 크기</span>
+                                        <span className="text-[#4AF2A1]">{fontSize}px</span>
+                                    </div>
+                                    <input type="range" min="14" max="48" value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                             </div>
                             </SettingsSection>
@@ -1145,19 +1213,6 @@ function App() {
                         </SettingsSection>
                         </div>
 
-                        <div className="mt-4 border-t border-[#162e58]/50 pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <span className="text-[11px] text-slate-400 tracking-wide">
-                                설정은 이 브라우저에 자동 저장됩니다.
-                            </span>
-                            <button
-                                type="button"
-                                onClick={resetUserSettings}
-                                className="self-start sm:self-auto text-[11px] px-4 py-2 rounded border border-[#D50000]/60 text-[#FF8A80] hover:bg-[#D50000]/20 transition-colors tracking-widest"
-                            >
-                                [ 모든 설정 초기화 ]
-                            </button>
-                        </div>
-
                         </div>
                             </div>
                         </div>
@@ -1167,12 +1222,8 @@ function App() {
 
             {/* 하단 상태 바 */}
             <div className="relative z-20 flex flex-col bg-[#030b1a]/95 shadow-2xl">
-                <footer className="relative flex items-center px-3 sm:px-6 border-t border-[#162e58]/50" style={{ height: `${rowHeight}px`, backgroundColor: footerColor }}>
-                    <div className="flex items-center space-x-2 sm:space-x-6 h-full z-10">
-                        <span className="hidden sm:inline text-[11px] text-white tracking-widest font-mono">
-                            [UPDATED {lastUpdated}]
-                        </span>
-
+                <footer className="relative flex items-center border-t border-[#162e58]/50" style={{ height: `${rowHeight}px`, backgroundColor: footerColor }}>
+                    <div className="z-10 flex h-full items-center">
                         <button
                             type="button"
                             onClick={() => setShowConfig(!showConfig)}
@@ -1188,12 +1239,12 @@ function App() {
                     </div>
                     
                     {totalPages > 1 && (
-                        <div className="absolute left-1/2 top-0 transform -translate-x-1/2 text-white tracking-widest h-full flex items-center pointer-events-none" style={{ fontSize: `${rowHeight * 0.43}px` }}>
+                        <div className="absolute left-1/2 top-0 transform -translate-x-1/2 text-white tracking-widest h-full flex items-center pointer-events-none" style={{ fontSize: `${fontSize}px` }}>
                             {currentPage + 1}
                         </div>
                     )}
 
-                    <div className="absolute right-3 sm:right-6 top-0 h-full flex items-center text-white tracking-wider pointer-events-none" style={{ fontSize: `${rowHeight * 0.43}px` }}>
+                    <div className="absolute right-3 sm:right-6 top-0 h-full flex items-center text-white tracking-wider pointer-events-none" style={{ fontSize: `${fontSize}px` }}>
                         {getShortTimeString(currentTime)}
                     </div>
                 </footer>
