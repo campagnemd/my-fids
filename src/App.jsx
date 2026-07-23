@@ -26,29 +26,30 @@ const formatAirportName = (airport) => (
     typeof airport === "string" ? airport.trim().replace(/\s*\/\s*/g, "/") : airport
 );
 
-function AccordionSection({ id, title, summary, isOpen, onToggle, children }) {
+const SETTINGS_CATEGORIES = [
+    { id: "time", title: "시간 및 동기화", description: "조회 범위와 API 갱신" },
+    { id: "size", title: "화면 크기", description: "행 개수와 표시 크기" },
+    { id: "pages", title: "페이지 전환", description: "전환 속도와 페이지 수" },
+    { id: "visibility", title: "표시 항목", description: "화면에 표시할 정보" },
+    { id: "colors", title: "화면 색상", description: "영역별 배경 색상" },
+    { id: "highlight", title: "정보 강조", description: "주요 정보 강조 표시" },
+    { id: "widths", title: "열 너비", description: "항목별 가로 너비" }
+];
+
+function SettingsSection({ id, title, summary, isOpen, children }) {
     const panelId = `settings-panel-${id}`;
 
+    if (!isOpen) return null;
+
     return (
-        <section className={`overflow-hidden border transition-colors ${isOpen ? 'border-[#458cff]/70 bg-[#061a3d]' : 'border-[#162e58] bg-[#051126]/70'}`}>
-            <button
-                type="button"
-                onClick={onToggle}
-                aria-expanded={isOpen}
-                aria-controls={panelId}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[#0a234d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4AF2A1]"
-            >
-                <span className={`text-[#4AF2A1] transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} aria-hidden="true">▶</span>
-                <span className="min-w-0 flex-1">
-                    <span className="block text-[12px] tracking-wider text-white">{title}</span>
-                    <span className="mt-1 block truncate text-[10px] tracking-wide text-slate-400">{summary}</span>
-                </span>
-            </button>
-            {isOpen && (
-                <div id={panelId} className="border-t border-[#162e58] px-4 py-4">
-                    {children}
-                </div>
-            )}
+        <section id={panelId} aria-labelledby={`settings-title-${id}`}>
+            <div className="mb-6 border-b border-[#162e58] pb-4">
+                <h3 id={`settings-title-${id}`} className="text-base tracking-[0.16em] text-white">{title}</h3>
+                <p className="mt-2 text-[11px] tracking-wide text-slate-400">{summary}</p>
+            </div>
+            <div className="rounded-lg border border-[#162e58] bg-[#061a3d]/70 p-4 sm:p-6">
+                {children}
+            </div>
         </section>
     );
 }
@@ -222,6 +223,17 @@ function App() {
         const clockTimer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(clockTimer);
     }, []);
+
+    useEffect(() => {
+        if (!showConfig) return undefined;
+
+        const closeOnEscape = (event) => {
+            if (event.key === "Escape") setShowConfig(false);
+        };
+
+        window.addEventListener("keydown", closeOnEscape);
+        return () => window.removeEventListener("keydown", closeOnEscape);
+    }, [showConfig]);
 
     useEffect(() => {
         if (showDisclaimer) return; // 약관 동의 전에는 페이지 전환을 하지 않음
@@ -763,27 +775,71 @@ function App() {
                 </div>
             </div>
 
-            {/* 🎛️ 하단 관제 커스텀 패널 */}
-            <div className="flex flex-col bg-[#030b1a]/95 border-t border-[#162e58]/50 shadow-2xl transition-all duration-300 relative z-20">
-                
-                {showConfig && (
-                    <div className="flex max-h-[72vh] flex-col overflow-y-auto bg-[#041430] px-3 py-4 text-sm text-slate-300 border-b border-[#162e58]/30 sm:px-6">
-                        <div className="mb-3 flex items-end justify-between gap-4">
+            {/* 🎛️ 화면 설정 모달 */}
+            {!showDisclaimer && showConfig && (
+                <div
+                    className="fixed inset-0 z-40 flex items-center justify-center bg-black/80 px-3 py-4 backdrop-blur-sm sm:px-6"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) setShowConfig(false);
+                    }}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="settings-dialog-title"
+                        className="flex h-[90vh] min-h-0 w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#162e58] bg-[#030b1a] shadow-2xl"
+                    >
+                        <div className="flex items-center justify-between border-b border-[#162e58] px-5 py-4 sm:px-7">
                             <div>
-                                <h2 className="text-sm tracking-[0.18em] text-white">화면 설정</h2>
-                                <p className="mt-1 text-[10px] tracking-wide text-slate-400">항목을 선택하면 해당 설정만 펼쳐집니다.</p>
+                                <div className="flex items-center gap-3">
+                                    <h2 id="settings-dialog-title" className="text-base tracking-[0.18em] text-white">화면 설정</h2>
+                                    <span className="hidden text-[10px] tracking-wide text-[#4AF2A1] sm:inline">자동 저장</span>
+                                </div>
+                                <p className="mt-1 text-[10px] tracking-wide text-slate-400">왼쪽에서 설정할 범주를 선택하세요.</p>
                             </div>
-                            <span className="hidden text-[10px] tracking-wide text-[#4AF2A1] sm:inline">자동 저장</span>
+                            <button
+                                type="button"
+                                onClick={() => setShowConfig(false)}
+                                aria-label="화면 설정 닫기"
+                                className="flex h-10 w-10 items-center justify-center rounded text-2xl text-slate-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AF2A1]"
+                            >
+                                ×
+                            </button>
                         </div>
-                        
-                        <div className="space-y-2">
+
+                        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                            <nav aria-label="화면 설정 범주" className="shrink-0 border-b border-[#162e58] bg-[#041027] p-3 md:w-64 md:border-b-0 md:border-r md:p-4">
+                                <div className="flex gap-2 overflow-x-auto md:flex-col md:overflow-visible">
+                                    {SETTINGS_CATEGORIES.map((category) => {
+                                        const isSelected = openConfigSection === category.id;
+                                        return (
+                                            <button
+                                                key={category.id}
+                                                type="button"
+                                                onClick={() => setOpenConfigSection(category.id)}
+                                                aria-current={isSelected ? "page" : undefined}
+                                                className={`min-w-[150px] border-l-2 px-4 py-3 text-left transition-colors md:min-w-0 ${
+                                                    isSelected
+                                                        ? "border-[#4AF2A1] bg-[#0a234d] text-white"
+                                                        : "border-transparent text-slate-400 hover:bg-[#071a38] hover:text-white"
+                                                }`}
+                                            >
+                                                <span className="block text-[12px] tracking-wider">{category.title}</span>
+                                                <span className="mt-1 hidden text-[9px] tracking-wide text-slate-500 md:block">{category.description}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </nav>
+
+                            <div className="min-h-0 flex-1 overflow-y-auto bg-[#041430] px-4 py-5 text-sm text-slate-300 sm:px-7 sm:py-6">
+                                <div className="space-y-2">
                             {/* 1열: 시간 및 동기화 */}
-                            <AccordionSection
+                            <SettingsSection
                                 id="time"
                                 title="시간 범위 및 데이터 동기화"
                                 summary={`과거 ${pastHours}시간 · 미래 ${futureHours}시간 · ${apiSyncInterval}분마다 갱신`}
                                 isOpen={openConfigSection === "time"}
-                                onToggle={() => setOpenConfigSection(current => current === "time" ? null : "time")}
                             >
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <div>
@@ -808,15 +864,14 @@ function App() {
                                     <input type="range" min="5" max="30" value={apiSyncInterval} onChange={(e) => setApiSyncInterval(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                             </div>
-                            </AccordionSection>
+                            </SettingsSection>
 
                             {/* 2열: 레이아웃 크기 */}
-                            <AccordionSection
+                            <SettingsSection
                                 id="size"
                                 title="화면 크기"
                                 summary={`${itemsPerPage}행 · 행 높이 ${rowHeight}px`}
                                 isOpen={openConfigSection === "size"}
-                                onToggle={() => setOpenConfigSection(current => current === "size" ? null : "size")}
                             >
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div>
@@ -834,15 +889,14 @@ function App() {
                                     <input type="range" min="40" max="95" value={rowHeight} onChange={(e) => setRowHeight(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                             </div>
-                            </AccordionSection>
+                            </SettingsSection>
 
                             {/* 3열: 페이지 및 전환 */}
-                            <AccordionSection
+                            <SettingsSection
                                 id="pages"
                                 title="페이지 및 화면 전환"
                                 summary={`${flipInterval}초마다 전환 · 최대 ${maxPages}페이지 · 코드쉐어 ${codeshareFlipInterval}초`}
                                 isOpen={openConfigSection === "pages"}
-                                onToggle={() => setOpenConfigSection(current => current === "pages" ? null : "pages")}
                             >
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <div>
@@ -867,15 +921,14 @@ function App() {
                                     <input type="range" min="1" max="10" value={codeshareFlipInterval} onChange={(e) => setCodeshareFlipInterval(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                             </div>
-                            </AccordionSection>
+                            </SettingsSection>
 
                             {/* 4열: 항목 토글 */}
-                            <AccordionSection
+                            <SettingsSection
                                 id="visibility"
                                 title="표시 항목"
                                 summary={`로고 ${showLogo ? "ON" : "OFF"} · 터미널 ${showTerminal ? "ON" : "OFF"} · 코드쉐어 ${showCodeshare ? "ON" : "OFF"}`}
                                 isOpen={openConfigSection === "visibility"}
-                                onToggle={() => setOpenConfigSection(current => current === "visibility" ? null : "visibility")}
                             >
                             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                                 <label className="flex items-center cursor-pointer group">
@@ -943,15 +996,14 @@ function App() {
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showDeparted ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>출발완료편</span>
                                 </label>
                             </div>
-                            </AccordionSection>
+                            </SettingsSection>
 
                             {/* 5열: 색상 */}
-                            <AccordionSection
+                            <SettingsSection
                                 id="colors"
                                 title="화면 색상"
                                 summary="메인·테이블 헤더 · 홀수·짝수행 · 페이지 바"
                                 isOpen={openConfigSection === "colors"}
-                                onToggle={() => setOpenConfigSection(current => current === "colors" ? null : "colors")}
                             >
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                                 <div className="flex items-center justify-between">
@@ -990,15 +1042,14 @@ function App() {
                                     </div>
                                 </div>
                             </div>
-                            </AccordionSection>
+                            </SettingsSection>
 
                             {/* 6열: 색상 강조 토글 */}
-                            <AccordionSection
+                            <SettingsSection
                                 id="highlight"
                                 title="정보 강조"
                                 summary={`변경 ${highlightChange ? "ON" : "OFF"} · 터미널 ${highlightTerminal ? "ON" : "OFF"} · 탑승구 ${highlightGate ? "ON" : "OFF"}`}
                                 isOpen={openConfigSection === "highlight"}
-                                onToggle={() => setOpenConfigSection(current => current === "highlight" ? null : "highlight")}
                             >
                             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                                 <label className="flex items-center cursor-pointer group">
@@ -1034,17 +1085,15 @@ function App() {
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${highlightGate ? 'text-[#FACC15]' : 'text-slate-400'}`}>탑승구 강조</span>
                                 </label>
                             </div>
-                            </AccordionSection>
-                        </div>
+                            </SettingsSection>
 
                         {/* 7. 가로 너비/비율 세밀 조정 */}
                         <div className="mt-2">
-                        <AccordionSection
+                        <SettingsSection
                             id="widths"
                             title="항목별 열 너비"
                             summary="시간 · 편명 · 로고 · 도착지 · 터미널 · 체크인 · 탑승구 · 현황"
                             isOpen={openConfigSection === "widths"}
-                            onToggle={() => setOpenConfigSection(current => current === "widths" ? null : "widths")}
                         >
                             <p className="mb-4 text-[10px] tracking-wide text-slate-400">도착지를 0으로 설정하면 남은 공간을 자동으로 채웁니다.</p>
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 text-xs text-slate-300">
@@ -1093,7 +1142,7 @@ function App() {
                                     <input type="range" min="30" max="400" value={wStatus} onChange={(e) => setWStatus(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                             </div>
-                        </AccordionSection>
+                        </SettingsSection>
                         </div>
 
                         <div className="mt-4 border-t border-[#162e58]/50 pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1109,9 +1158,15 @@ function App() {
                             </button>
                         </div>
 
+                        </div>
+                            </div>
+                        </div>
                     </div>
-                )}
+                </div>
+            )}
 
+            {/* 하단 상태 바 */}
+            <div className="relative z-20 flex flex-col bg-[#030b1a]/95 shadow-2xl">
                 <footer className="relative flex items-center px-3 sm:px-6 border-t border-[#162e58]/50" style={{ height: `${rowHeight}px`, backgroundColor: footerColor }}>
                     <div className="flex items-center space-x-2 sm:space-x-6 h-full z-10">
                         <span className="hidden sm:inline text-[11px] text-white tracking-widest font-mono">
@@ -1124,10 +1179,10 @@ function App() {
                             aria-label={showConfig ? "설정 패널 닫기" : "설정 패널 열기"}
                             aria-expanded={showConfig}
                             title={showConfig ? "설정 닫기" : "설정 열기"}
-                            className={`flex h-9 w-10 items-center justify-center border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AF2A1] ${showConfig ? 'bg-[#458cff] text-white border-[#7fb2ff]' : 'text-white border-[#1b3a6d] hover:bg-[#162e58]/70'}`}
+                            className="flex h-11 w-12 items-center justify-center bg-transparent text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AF2A1]"
                         >
-                            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-                                <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+                            <svg viewBox="0 0 24 24" width="31" height="31" aria-hidden="true" focusable="false">
+                                <path d="M3 5.5h18M3 12h18M3 18.5h18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" />
                             </svg>
                         </button>
                     </div>
