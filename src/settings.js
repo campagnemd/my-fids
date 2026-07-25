@@ -66,23 +66,30 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showDeparted: false,
   showHeader: false,
   flightFirst: true,
+  attachFooterToRows: false,
+  terminalFilter: "all",
+  autoDestWidth: true,
   highlightChange: true,
   highlightTerminal: false,
   highlightCheckin: true,
   highlightGate: true,
+  highlightCurrentTime: true,
   codeshareFlipInterval: 2,
   headerColor: "#2f6bca",
   tableHeaderColor: "#000000",
   footerColor: "#030b1a",
-  oddRowColor: "#3065bb",
-  evenRowColor: "#1752b0",
+  oddRowColor: "#5284a3",
+  evenRowColor: "#5b97ae",
+  delayedStatusColor: "#FF6D00",
+  cancelledStatusColor: "#D50000",
+  highlightTextColor: "#FACC15",
   wTime: 110,
   wChange: 110,
   wActualLogo: 100,
   wActualNum: 110,
   wCodeLogo: 100,
   wCodeNum: 110,
-  wDest: 0,
+  wDest: 400,
   wTerminal: 110,
   wCheckin: 160,
   wGate: 140,
@@ -105,7 +112,7 @@ const NUMBER_LIMITS = {
   wActualNum: [30, 300],
   wCodeLogo: [20, 150],
   wCodeNum: [30, 300],
-  wDest: [0, 800],
+  wDest: [30, 800],
   wTerminal: [30, 300],
   wCheckin: [30, 400],
   wGate: [30, 300],
@@ -130,6 +137,9 @@ export const loadUserSettings = () => {
         }
 
         if (typeof defaultValue === "boolean") {
+          if (key === "autoDestWidth" && typeof savedValue !== "boolean") {
+            return [key, saved.wDest === 0];
+          }
           return [key, typeof savedValue === "boolean" ? savedValue : defaultValue];
         }
 
@@ -148,6 +158,13 @@ export const loadUserSettings = () => {
             FONT_OPTIONS.some((option) => option.id === savedValue)
               ? savedValue
               : defaultValue
+          ];
+        }
+
+        if (key === "terminalFilter") {
+          return [
+            key,
+            ["all", "T1", "T2"].includes(savedValue) ? savedValue : defaultValue
           ];
         }
 

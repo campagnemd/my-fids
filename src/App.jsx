@@ -31,6 +31,21 @@ const formatAirportName = (airport) => (
         : airport
 );
 
+const getFlightTerminal = (gateNumber, terminalId) => {
+    const normalizedTerminal = String(terminalId || "").trim().toUpperCase();
+    const terminalFromId = ["T2", "P02", "2"].includes(normalizedTerminal)
+        ? "T2"
+        : ["T1", "P01", "1"].includes(normalizedTerminal)
+            ? "T1"
+            : null;
+    if (!gateNumber) return terminalFromId || "T1";
+    const gate = parseInt(gateNumber, 10);
+    if (Number.isNaN(gate)) return terminalFromId || "T1";
+    if (gate >= 1 && gate <= 199) return "T1";
+    if (gate >= 200 && gate <= 299) return "T2";
+    return terminalFromId || "T1";
+};
+
 const SETTINGS_CATEGORIES = [
     { id: "time", title: "시간 및 동기화" },
     { id: "size", title: "화면 및 글꼴" },
@@ -50,6 +65,64 @@ function SettingsSection({ id, isOpen, children }) {
         <section id={panelId}>
             {children}
         </section>
+    );
+}
+
+function NumericRange({ label, value, onChange, min, max, unit = "px", displayValue }) {
+    const [draft, setDraft] = useState(String(value));
+
+    useEffect(() => {
+        setDraft(String(value));
+    }, [value]);
+
+    const commitDraft = () => {
+        const parsed = Number(draft);
+        const nextValue = Number.isFinite(parsed)
+            ? Math.min(max, Math.max(min, Math.round(parsed)))
+            : value;
+        onChange(nextValue);
+        setDraft(String(nextValue));
+    };
+
+    return (
+        <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+                <span>{label}</span>
+                <label className="flex items-center gap-1 text-[#4AF2A1]">
+                    <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        value={draft}
+                        onChange={(event) => {
+                            const nextDraft = event.target.value;
+                            setDraft(nextDraft);
+                            const parsed = Number(nextDraft);
+                            if (nextDraft !== "" && Number.isFinite(parsed) && parsed >= min && parsed <= max) {
+                                onChange(Math.round(parsed));
+                            }
+                        }}
+                        onBlur={commitDraft}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter") event.currentTarget.blur();
+                        }}
+                        aria-label={`${label} 직접 입력`}
+                        className="w-16 rounded border border-[#162e58] bg-[#051126] px-1 py-1 text-right text-[11px] text-[#4AF2A1] outline-none focus:border-[#458cff]"
+                    />
+                    <span>{unit}</span>
+                </label>
+            </div>
+            <input
+                type="range"
+                min={min}
+                max={max}
+                value={value}
+                onChange={(event) => onChange(parseInt(event.target.value, 10))}
+                aria-label={`${label} 슬라이더`}
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-[#051126] accent-[#458cff]"
+            />
+            {displayValue && <div className="mt-1 text-right text-[10px] text-slate-400">{displayValue}</div>}
+        </div>
     );
 }
 
@@ -100,9 +173,6 @@ function OverflowText({ text, align = "center", className = "" }) {
                 <span className={isOverflowing ? "marquee-copy" : "marquee-copy-static"}>
                     <span ref={textRef}>{text}</span>
                 </span>
-                {isOverflowing && (
-                    <span className="marquee-copy" aria-hidden="true"><span>{text}</span></span>
-                )}
             </div>
         </div>
     );
@@ -151,12 +221,15 @@ function App() {
     const [showDeparted, setShowDeparted] = useState(initialSettings.showDeparted);
     const [showHeader, setShowHeader] = useState(initialSettings.showHeader);
     const [flightFirst, setFlightFirst] = useState(initialSettings.flightFirst);
+    const [attachFooterToRows, setAttachFooterToRows] = useState(initialSettings.attachFooterToRows);
+    const [terminalFilter, setTerminalFilter] = useState(initialSettings.terminalFilter);
 
     // 3-1. 색상 강조 토글
     const [highlightChange, setHighlightChange] = useState(initialSettings.highlightChange);
     const [highlightTerminal, setHighlightTerminal] = useState(initialSettings.highlightTerminal);
     const [highlightCheckin, setHighlightCheckin] = useState(initialSettings.highlightCheckin);
     const [highlightGate, setHighlightGate] = useState(initialSettings.highlightGate);
+    const [highlightCurrentTime, setHighlightCurrentTime] = useState(initialSettings.highlightCurrentTime);
 
     // 3-2. 코드쉐어 회전 간격 (초)
     const [codeshareFlipInterval, setCodeshareFlipInterval] = useState(initialSettings.codeshareFlipInterval);
@@ -169,6 +242,9 @@ function App() {
     const [footerColor, setFooterColor] = useState(initialSettings.footerColor);
     const [oddRowColor, setOddRowColor] = useState(initialSettings.oddRowColor);
     const [evenRowColor, setEvenRowColor] = useState(initialSettings.evenRowColor);
+    const [delayedStatusColor, setDelayedStatusColor] = useState(initialSettings.delayedStatusColor);
+    const [cancelledStatusColor, setCancelledStatusColor] = useState(initialSettings.cancelledStatusColor);
+    const [highlightTextColor, setHighlightTextColor] = useState(initialSettings.highlightTextColor);
 
     // 5. 각 열 가로 비율/너비 제어
     const [wTime, setWTime] = useState(initialSettings.wTime);
@@ -182,6 +258,7 @@ function App() {
     const [wCheckin, setWCheckin] = useState(initialSettings.wCheckin);
     const [wGate, setWGate] = useState(initialSettings.wGate);
     const [wStatus, setWStatus] = useState(initialSettings.wStatus);
+    const [autoDestWidth, setAutoDestWidth] = useState(initialSettings.autoDestWidth);
 
     useEffect(() => {
         saveUserSettings({
@@ -202,16 +279,23 @@ function App() {
             showDeparted,
             showHeader,
             flightFirst,
+            attachFooterToRows,
+            terminalFilter,
+            autoDestWidth,
             highlightChange,
             highlightTerminal,
             highlightCheckin,
             highlightGate,
+            highlightCurrentTime,
             codeshareFlipInterval,
             headerColor,
             tableHeaderColor,
             footerColor,
             oddRowColor,
             evenRowColor,
+            delayedStatusColor,
+            cancelledStatusColor,
+            highlightTextColor,
             wTime,
             wChange,
             wActualLogo,
@@ -228,9 +312,11 @@ function App() {
         itemsPerPage, rowHeight, fontSize, fontFamily, pastHours, futureHours, apiSyncInterval,
         flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
         showCheckin, showCodeshare, showDeparted, showHeader, flightFirst,
-        highlightChange, highlightTerminal, highlightCheckin, highlightGate,
+        attachFooterToRows, terminalFilter, autoDestWidth,
+        highlightChange, highlightTerminal, highlightCheckin, highlightGate, highlightCurrentTime,
         codeshareFlipInterval, headerColor, tableHeaderColor, footerColor,
-        oddRowColor, evenRowColor, wTime, wChange, wActualLogo, wActualNum,
+        oddRowColor, evenRowColor, delayedStatusColor, cancelledStatusColor, highlightTextColor,
+        wTime, wChange, wActualLogo, wActualNum,
         wCodeLogo, wCodeNum, wDest, wTerminal, wCheckin, wGate, wStatus
     ]);
 
@@ -255,16 +341,23 @@ function App() {
         setShowDeparted(DEFAULT_SETTINGS.showDeparted);
         setShowHeader(DEFAULT_SETTINGS.showHeader);
         setFlightFirst(DEFAULT_SETTINGS.flightFirst);
+        setAttachFooterToRows(DEFAULT_SETTINGS.attachFooterToRows);
+        setTerminalFilter(DEFAULT_SETTINGS.terminalFilter);
+        setAutoDestWidth(DEFAULT_SETTINGS.autoDestWidth);
         setHighlightChange(DEFAULT_SETTINGS.highlightChange);
         setHighlightTerminal(DEFAULT_SETTINGS.highlightTerminal);
         setHighlightCheckin(DEFAULT_SETTINGS.highlightCheckin);
         setHighlightGate(DEFAULT_SETTINGS.highlightGate);
+        setHighlightCurrentTime(DEFAULT_SETTINGS.highlightCurrentTime);
         setCodeshareFlipInterval(DEFAULT_SETTINGS.codeshareFlipInterval);
         setHeaderColor(DEFAULT_SETTINGS.headerColor);
         setTableHeaderColor(DEFAULT_SETTINGS.tableHeaderColor);
         setFooterColor(DEFAULT_SETTINGS.footerColor);
         setOddRowColor(DEFAULT_SETTINGS.oddRowColor);
         setEvenRowColor(DEFAULT_SETTINGS.evenRowColor);
+        setDelayedStatusColor(DEFAULT_SETTINGS.delayedStatusColor);
+        setCancelledStatusColor(DEFAULT_SETTINGS.cancelledStatusColor);
+        setHighlightTextColor(DEFAULT_SETTINGS.highlightTextColor);
         setWTime(DEFAULT_SETTINGS.wTime);
         setWChange(DEFAULT_SETTINGS.wChange);
         setWActualLogo(DEFAULT_SETTINGS.wActualLogo);
@@ -583,6 +676,9 @@ function App() {
             const isCompleted = remark.includes("출발") || remark.includes("이륙") || remark.includes("종료");
 
             if (flightTimestamp >= startBoundary && flightTimestamp <= endBoundary) {
+                if (terminalFilter !== "all" && getFlightTerminal(flight.gateNumber, flight.terminalId) !== terminalFilter) {
+                    return false;
+                }
                 if (!showDeparted && isCompleted) return false;
                 
                 if (flightTimestamp < nowTimestamp) {
@@ -609,7 +705,7 @@ function App() {
             setCurrentPage(0); 
             return processed;
         });
-    }, [currentMinute, flights, showDeparted, pastHours, futureHours]);
+    }, [currentMinute, flights, showDeparted, pastHours, futureHours, terminalFilter]);
 
     const pageData = filteredFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
     const totalPages = Math.min(Math.ceil(filteredFlights.length / itemsPerPage), maxPages);
@@ -633,15 +729,6 @@ function App() {
         return { code: id.toUpperCase(), num: "" };
     };
 
-    const getTerminalInfo = (gateNumber, terminalId) => {
-        if (!gateNumber) return terminalId || "T1";
-        const gate = parseInt(gateNumber, 10);
-        if (isNaN(gate)) return terminalId || "T1";
-        if (gate >= 1 && gate <= 199) return "T1";
-        if (gate >= 200 && gate <= 299) return "T2";
-        return terminalId || "T1";
-    };
-
     const renderStatusAndStyle = (remark) => {
         const status = remark || "정시";
         const baseClass = "w-full h-full flex items-center justify-center font-black text-center ";
@@ -653,9 +740,9 @@ function App() {
         } else if (status.includes("마감") || status.includes("최종")) {
             return <div className={`${baseClass} text-[#FFD700] animate-pulse`}><OverflowText text="마감예정" /></div>;
         } else if (status.includes("지연")) {
-            return <div className={`${baseClass} bg-[#FF6D00] text-white`}><OverflowText text="지연" /></div>;
+            return <div className={`${baseClass} text-white`} style={{ backgroundColor: delayedStatusColor }}><OverflowText text="지연" /></div>;
         } else if (status.includes("결항")) {
-            return <div className={`${baseClass} bg-[#D50000] text-white`}><OverflowText text="결항" /></div>;
+            return <div className={`${baseClass} text-white`} style={{ backgroundColor: cancelledStatusColor }}><OverflowText text="결항" /></div>;
         } else if (status.includes("출발") || status.includes("이륙") || status.includes("종료")) {
             return <div className={`${baseClass} text-slate-400`}><OverflowText text={status} /></div>;
         }
@@ -695,7 +782,7 @@ function App() {
         + (showCheckin ? checkinColWidth : 0)
         + gateColWidth
         + statusColWidth;
-    const desiredDestWidth = wDest === 0
+    const desiredDestWidth = autoDestWidth
         ? Math.max(40, boardWidth - fixedColumnsWidth)
         : scalePx(wDest);
     const desiredBoardWidth = fixedColumnsWidth + desiredDestWidth;
@@ -747,8 +834,11 @@ function App() {
 
     return (
         <div
-            className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none overflow-hidden relative"
-            style={{ "--fids-font-family": getFontFamily(fontFamily) }}
+            className={`min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col select-none overflow-hidden relative ${attachFooterToRows ? "justify-start" : "justify-between"}`}
+            style={{
+                "--fids-font-family": getFontFamily(fontFamily),
+                "--highlight-text-color": highlightTextColor
+            }}
         >
             
             {/* 🛠️ 시작 경고문구 (Disclaimer Modal) */}
@@ -832,13 +922,13 @@ function App() {
                         <div className="flex min-w-0 items-center justify-center"><OverflowText text="변경" /></div>
                         {flightFirst ? (
                             <React.Fragment>
-                                <div className="flex min-w-0 items-center pl-2 text-left"><OverflowText text="편명" align="left" /></div>
-                                <div className="flex min-w-0 items-center pl-3 text-left"><OverflowText text="도착지" align="left" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="편명" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
                             </React.Fragment>
                         ) : (
                             <React.Fragment>
-                                <div className="flex min-w-0 items-center pl-3 text-left"><OverflowText text="도착지" align="left" /></div>
-                                <div className="flex min-w-0 items-center pl-2 text-left"><OverflowText text="편명" align="left" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="편명" /></div>
                             </React.Fragment>
                         )}
                         
@@ -905,7 +995,7 @@ function App() {
                                         
                                         <div className="flex min-w-0 items-center justify-center text-center text-[#FFFFFF]"><OverflowText text={schedTime} /></div>
                                         
-                                        <div className={`flex min-w-0 items-center justify-center text-center ${highlightChange ? 'text-[#FACC15]' : 'text-white'}`}>
+                                        <div className="flex min-w-0 items-center justify-center text-center" style={{ color: highlightChange ? highlightTextColor : "#ffffff" }}>
                                             <OverflowText text={renderEstimatedTime(flight)} />
                                         </div>
                                         
@@ -922,18 +1012,18 @@ function App() {
                                         )}
                                         
                                         {showTerminal && (
-                                            <div className={`flex min-w-0 items-center justify-center text-center tracking-wide ${highlightTerminal ? 'text-[#FACC15]' : 'text-white'}`}>
-                                                <OverflowText text={getTerminalInfo(flight.gateNumber, flight.terminalId)} />
+                                            <div className="flex min-w-0 items-center justify-center text-center tracking-wide" style={{ color: highlightTerminal ? highlightTextColor : "#ffffff" }}>
+                                                <OverflowText text={getFlightTerminal(flight.gateNumber, flight.terminalId)} />
                                             </div>
                                         )}
                                         
                                         {showCheckin && (
-                                            <div className={`flex min-w-0 items-center justify-center text-center tracking-wide ${highlightCheckin ? 'text-[#FACC15]' : 'text-white'}`}>
+                                            <div className="flex min-w-0 items-center justify-center text-center tracking-wide" style={{ color: highlightCheckin ? highlightTextColor : "#ffffff" }}>
                                                 <OverflowText text={flight.chkinRange || "—"} />
                                             </div>
                                         )}
                                         
-                                        <div className={`flex min-w-0 items-center justify-center text-center ${highlightGate ? 'text-[#FACC15]' : 'text-white'}`}><OverflowText text={flight.gateNumber || "—"} /></div>
+                                        <div className="flex min-w-0 items-center justify-center text-center" style={{ color: highlightGate ? highlightTextColor : "#ffffff" }}><OverflowText text={flight.gateNumber || "—"} /></div>
                                         
                                         <div className="h-full w-full flex items-center justify-center">
                                             {renderStatusAndStyle(flight.remark)}
@@ -1051,27 +1141,9 @@ function App() {
                                 isOpen={openConfigSection === "size"}
                             >
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                <div>
-                                    <div className="flex justify-between">
-                                        <span>페이지당 줄 개수</span>
-                                        <span className="text-[#4AF2A1]">{itemsPerPage} 행</span>
-                                    </div>
-                                    <input type="range" min="5" max="20" value={itemsPerPage} onChange={(e) => setItemsPerPage(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between">
-                                        <span>행 높이</span>
-                                        <span className="text-[#4AF2A1]">{rowHeight}px</span>
-                                    </div>
-                                    <input type="range" min="40" max="95" value={rowHeight} onChange={(e) => setRowHeight(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between">
-                                        <span>글자 크기</span>
-                                        <span className="text-[#4AF2A1]">{fontSize}px</span>
-                                    </div>
-                                    <input type="range" min="14" max="48" value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
+                                <NumericRange label="페이지당 줄 개수" value={itemsPerPage} onChange={setItemsPerPage} min={5} max={20} unit="행" />
+                                <NumericRange label="행 높이" value={rowHeight} onChange={setRowHeight} min={40} max={95} />
+                                <NumericRange label="글자 크기" value={fontSize} onChange={setFontSize} min={14} max={48} />
                                 <label>
                                     <span className="block mb-1">글꼴</span>
                                     <select
@@ -1122,7 +1194,7 @@ function App() {
                                 id="visibility"
                                 isOpen={openConfigSection === "visibility"}
                             >
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                                 <label className="flex items-center cursor-pointer group">
                                     <div className="relative">
                                         <input type="checkbox" className="sr-only" checked={!flightFirst} onChange={() => setFlightFirst(!flightFirst)} />
@@ -1177,7 +1249,7 @@ function App() {
                                         <div className={`block w-7 h-3 rounded-full transition-colors ${showCodeshare ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
                                         <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${showCodeshare ? 'transform translate-x-4' : ''}`}></div>
                                     </div>
-                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showCodeshare ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>코드쉐어편</span>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showCodeshare ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>공동운항편</span>
                                 </label>
                                 <label className="flex items-center cursor-pointer group">
                                     <div className="relative">
@@ -1187,6 +1259,26 @@ function App() {
                                     </div>
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showDeparted ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>출발완료편</span>
                                 </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={attachFooterToRows} onChange={() => setAttachFooterToRows(!attachFooterToRows)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${attachFooterToRows ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${attachFooterToRows ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${attachFooterToRows ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>페이지 바를 마지막 줄 아래에 표시</span>
+                                </label>
+                                <label className="flex items-center gap-3 text-[11px] tracking-wider text-slate-300">
+                                    <span className="shrink-0">터미널 항공편</span>
+                                    <select
+                                        value={terminalFilter}
+                                        onChange={(event) => setTerminalFilter(event.target.value)}
+                                        className="h-8 min-w-0 flex-1 rounded border border-[#162e58] bg-[#051126] px-2 text-xs text-white outline-none focus:border-[#458cff]"
+                                    >
+                                        <option value="all">전체</option>
+                                        <option value="T1">T1만</option>
+                                        <option value="T2">T2만</option>
+                                    </select>
+                                </label>
                             </div>
                             </SettingsSection>
 
@@ -1195,7 +1287,7 @@ function App() {
                                 id="colors"
                                 isOpen={openConfigSection === "colors"}
                             >
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-bold">메인 헤더</span>
                                     <div className="flex items-center space-x-2">
@@ -1231,6 +1323,27 @@ function App() {
                                         <input type="text" value={footerColor} onChange={(e)=>setFooterColor(e.target.value)} className="w-[60px] bg-[#051126] text-white text-[10px] font-mono text-center border border-[#162e58] rounded py-1"/>
                                     </div>
                                 </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold">지연 배경</span>
+                                    <div className="flex items-center space-x-2">
+                                        <input type="color" value={delayedStatusColor} onChange={(e) => setDelayedStatusColor(e.target.value)} />
+                                        <input type="text" value={delayedStatusColor} onChange={(e) => setDelayedStatusColor(e.target.value)} className="w-[60px] rounded border border-[#162e58] bg-[#051126] py-1 text-center font-mono text-[10px] uppercase text-white outline-none focus:border-[#458cff]" />
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold">결항 배경</span>
+                                    <div className="flex items-center space-x-2">
+                                        <input type="color" value={cancelledStatusColor} onChange={(e) => setCancelledStatusColor(e.target.value)} />
+                                        <input type="text" value={cancelledStatusColor} onChange={(e) => setCancelledStatusColor(e.target.value)} className="w-[60px] rounded border border-[#162e58] bg-[#051126] py-1 text-center font-mono text-[10px] uppercase text-white outline-none focus:border-[#458cff]" />
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold">강조 글자</span>
+                                    <div className="flex items-center space-x-2">
+                                        <input type="color" value={highlightTextColor} onChange={(e) => setHighlightTextColor(e.target.value)} />
+                                        <input type="text" value={highlightTextColor} onChange={(e) => setHighlightTextColor(e.target.value)} className="w-[60px] rounded border border-[#162e58] bg-[#051126] py-1 text-center font-mono text-[10px] uppercase text-white outline-none focus:border-[#458cff]" />
+                                    </div>
+                                </div>
                             </div>
                             </SettingsSection>
 
@@ -1239,7 +1352,7 @@ function App() {
                                 id="highlight"
                                 isOpen={openConfigSection === "highlight"}
                             >
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
                                 <label className="flex items-center cursor-pointer group">
                                     <div className="relative">
                                         <input type="checkbox" className="sr-only" checked={highlightChange} onChange={() => setHighlightChange(!highlightChange)} />
@@ -1272,6 +1385,14 @@ function App() {
                                     </div>
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${highlightGate ? 'text-[#FACC15]' : 'text-slate-400'}`}>탑승구 강조</span>
                                 </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={highlightCurrentTime} onChange={() => setHighlightCurrentTime(!highlightCurrentTime)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${highlightCurrentTime ? 'bg-[#FACC15]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${highlightCurrentTime ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${highlightCurrentTime ? 'text-[#FACC15]' : 'text-slate-400'}`}>현재시간 강조</span>
+                                </label>
                             </div>
                             </SettingsSection>
 
@@ -1281,52 +1402,33 @@ function App() {
                             id="widths"
                             isOpen={openConfigSection === "widths"}
                         >
-                            <p className="mb-4 text-[10px] tracking-wide text-slate-400">도착지를 0으로 설정하면 남은 공간을 자동으로 채웁니다.</p>
+                            <label className="mb-5 flex items-center cursor-pointer group">
+                                <div className="relative">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only"
+                                        checked={autoDestWidth}
+                                        onChange={() => setAutoDestWidth(!autoDestWidth)}
+                                    />
+                                    <div className={`block w-7 h-3 rounded-full transition-colors ${autoDestWidth ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                    <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${autoDestWidth ? 'transform translate-x-4' : ''}`}></div>
+                                </div>
+                                <span className={`ml-3 text-[11px] tracking-wider transition-colors ${autoDestWidth ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>도착지 너비 자동 조절</span>
+                            </label>
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 text-xs text-slate-300">
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>시간</span><span className="text-[#4AF2A1]">{wTime}px</span></div>
-                                    <input type="range" min="30" max="300" value={wTime} onChange={(e) => setWTime(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                <NumericRange label="시간" value={wTime} onChange={setWTime} min={30} max={300} />
+                                <NumericRange label="변경 시간" value={wChange} onChange={setWChange} min={30} max={300} />
+                                <NumericRange label="실제운항 로고" value={wActualLogo} onChange={setWActualLogo} min={20} max={150} />
+                                <NumericRange label="실제운항 편명" value={wActualNum} onChange={setWActualNum} min={30} max={300} />
+                                <NumericRange label="공동운항 로고" value={wCodeLogo} onChange={setWCodeLogo} min={20} max={150} />
+                                <NumericRange label="공동운항 편명" value={wCodeNum} onChange={setWCodeNum} min={30} max={300} />
+                                <div className={autoDestWidth ? "opacity-45" : ""}>
+                                    <NumericRange label="도착지" value={wDest} onChange={setWDest} min={30} max={800} />
                                 </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>변경 시간</span><span className="text-[#4AF2A1]">{wChange}px</span></div>
-                                    <input type="range" min="30" max="300" value={wChange} onChange={(e) => setWChange(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>실제운항 로고</span><span className="text-[#4AF2A1]">{wActualLogo}px</span></div>
-                                    <input type="range" min="20" max="150" value={wActualLogo} onChange={(e) => setWActualLogo(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>실제운항 편명</span><span className="text-[#4AF2A1]">{wActualNum}px</span></div>
-                                    <input type="range" min="30" max="300" value={wActualNum} onChange={(e) => setWActualNum(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>공동운항 로고</span><span className="text-[#4AF2A1]">{wCodeLogo}px</span></div>
-                                    <input type="range" min="20" max="150" value={wCodeLogo} onChange={(e) => setWCodeLogo(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>공동운항 편명</span><span className="text-[#4AF2A1]">{wCodeNum}px</span></div>
-                                    <input type="range" min="30" max="300" value={wCodeNum} onChange={(e) => setWCodeNum(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>도착지</span><span className="text-[#4AF2A1]">{wDest === 0 ? '자동(1fr)' : `${wDest}px`}</span></div>
-                                    <input type="range" min="0" max="800" value={wDest} onChange={(e) => setWDest(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>터미널</span><span className="text-[#4AF2A1]">{wTerminal}px</span></div>
-                                    <input type="range" min="30" max="300" value={wTerminal} onChange={(e) => setWTerminal(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>체크인</span><span className="text-[#4AF2A1]">{wCheckin}px</span></div>
-                                    <input type="range" min="30" max="400" value={wCheckin} onChange={(e) => setWCheckin(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>탑승구</span><span className="text-[#4AF2A1]">{wGate}px</span></div>
-                                    <input type="range" min="30" max="300" value={wGate} onChange={(e) => setWGate(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1"><span>현황</span><span className="text-[#4AF2A1]">{wStatus}px</span></div>
-                                    <input type="range" min="30" max="400" value={wStatus} onChange={(e) => setWStatus(parseInt(e.target.value))} className="w-full accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
-                                </div>
+                                <NumericRange label="터미널" value={wTerminal} onChange={setWTerminal} min={30} max={300} />
+                                <NumericRange label="체크인" value={wCheckin} onChange={setWCheckin} min={30} max={400} />
+                                <NumericRange label="탑승구" value={wGate} onChange={setWGate} min={30} max={300} />
+                                <NumericRange label="현황" value={wStatus} onChange={setWStatus} min={30} max={400} />
                             </div>
                         </SettingsSection>
                         </div>
@@ -1362,7 +1464,10 @@ function App() {
                         </div>
                     )}
 
-                    <div className="absolute right-3 sm:right-6 top-0 h-full flex items-center text-white tracking-wider pointer-events-none" style={{ fontSize: `${fontSize}px` }}>
+                    <div
+                        className={`absolute right-3 top-0 flex h-full items-center tracking-wider pointer-events-none sm:right-6 ${highlightCurrentTime ? "current-time-highlight" : "text-white"}`}
+                        style={{ fontSize: `${fontSize}px` }}
+                    >
                         {getShortTimeString(currentTime)}
                     </div>
                 </footer>

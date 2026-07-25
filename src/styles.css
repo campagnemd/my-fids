@@ -109,7 +109,7 @@ input[type="color"]::-webkit-color-swatch {
 }
 
 .marquee-track {
-  display: flex;
+  display: inline-flex;
   width: max-content;
   min-width: max-content;
   animation: marquee-scroll var(--marquee-duration, 8s) linear infinite;
@@ -126,16 +126,33 @@ input[type="color"]::-webkit-color-swatch {
 
 .marquee-copy {
   display: inline-block;
-  padding-right: 2.5em;
   white-space: nowrap;
 }
 
 @keyframes marquee-scroll {
-  from {
+  0%,
+  15% {
     transform: translateX(0);
   }
 
-  to {
-    transform: translateX(-50%);
+  75%,
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.current-time-highlight {
+  animation: current-time-highlight 4s steps(1, end) infinite;
+}
+
+@keyframes current-time-highlight {
+  0%,
+  49.999% {
+    color: #fff;
+  }
+
+  50%,
+  100% {
+    color: var(--highlight-text-color, #facc15);
   }
 }
