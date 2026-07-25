@@ -1,5 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_SETTINGS, loadUserSettings, saveUserSettings, clearUserSettings } from "./settings";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+    DEFAULT_SETTINGS,
+    FONT_OPTIONS,
+    clearUserSettings,
+    getFontFamily,
+    loadUserSettings,
+    saveUserSettings
+} from "./settings";
 import AirlineLogo from "./AirlineLogo";
 
 const getShortTimeString = (dateObj) => {
@@ -46,6 +53,60 @@ function SettingsSection({ id, isOpen, children }) {
     );
 }
 
+function OverflowText({ text, className = "" }) {
+    const containerRef = useRef(null);
+    const textRef = useRef(null);
+    const [isOverflowing, setIsOverflowing] = useState(false);
+
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        const textElement = textRef.current;
+        if (!container || !textElement) return undefined;
+        let isDisposed = false;
+
+        const checkOverflow = () => {
+            if (isDisposed) return;
+            setIsOverflowing(textElement.scrollWidth > container.clientWidth + 1);
+        };
+
+        checkOverflow();
+        const resizeObserver = typeof ResizeObserver === "undefined"
+            ? null
+            : new ResizeObserver(checkOverflow);
+        resizeObserver?.observe(container);
+        resizeObserver?.observe(textElement);
+        window.addEventListener("resize", checkOverflow);
+        document.fonts?.ready.then(checkOverflow);
+
+        return () => {
+            isDisposed = true;
+            resizeObserver?.disconnect();
+            window.removeEventListener("resize", checkOverflow);
+        };
+    }, [text]);
+
+    const duration = Math.max(6, String(text).length * 0.45);
+
+    return (
+        <div
+            ref={containerRef}
+            className={`marquee-viewport ${isOverflowing ? "is-overflowing" : ""} ${className}`}
+        >
+            <div
+                className={isOverflowing ? "marquee-track" : "marquee-static"}
+                style={isOverflowing ? { "--marquee-duration": `${duration}s` } : undefined}
+            >
+                <span className={isOverflowing ? "marquee-copy" : "marquee-copy-static"}>
+                    <span ref={textRef}>{text}</span>
+                </span>
+                {isOverflowing && (
+                    <span className="marquee-copy" aria-hidden="true"><span>{text}</span></span>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function App() {
     const [initialSettings] = useState(loadUserSettings);
 
@@ -66,6 +127,7 @@ function App() {
     const [itemsPerPage, setItemsPerPage] = useState(initialSettings.itemsPerPage);
     const [rowHeight, setRowHeight] = useState(initialSettings.rowHeight);
     const [fontSize, setFontSize] = useState(initialSettings.fontSize);
+    const [fontFamily, setFontFamily] = useState(initialSettings.fontFamily);
     
     // 2. 시간/타이머/페이드 제어
     const [pastHours, setPastHours] = useState(initialSettings.pastHours);
@@ -121,6 +183,7 @@ function App() {
             itemsPerPage,
             rowHeight,
             fontSize,
+            fontFamily,
             pastHours,
             futureHours,
             apiSyncInterval,
@@ -157,7 +220,7 @@ function App() {
             wStatus
         });
     }, [
-        itemsPerPage, rowHeight, fontSize, pastHours, futureHours, apiSyncInterval,
+        itemsPerPage, rowHeight, fontSize, fontFamily, pastHours, futureHours, apiSyncInterval,
         flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
         showCheckin, showCodeshare, showDeparted, showHeader, flightFirst,
         highlightChange, highlightTerminal, highlightCheckin, highlightGate,
@@ -173,6 +236,7 @@ function App() {
         setItemsPerPage(DEFAULT_SETTINGS.itemsPerPage);
         setRowHeight(DEFAULT_SETTINGS.rowHeight);
         setFontSize(DEFAULT_SETTINGS.fontSize);
+        setFontFamily(DEFAULT_SETTINGS.fontFamily);
         setPastHours(DEFAULT_SETTINGS.pastHours);
         setFutureHours(DEFAULT_SETTINGS.futureHours);
         setApiSyncInterval(DEFAULT_SETTINGS.apiSyncInterval);
@@ -557,17 +621,17 @@ function App() {
         const baseClass = "w-full h-full flex items-center justify-center font-black text-center ";
         
         if (status.includes("탑승중")) {
-            return <div className={`${baseClass} text-white animate-pulse`}>탑승중</div>;
+            return <div className={`${baseClass} text-white animate-pulse`}><OverflowText text="탑승중" /></div>;
         } else if (status.includes("준비") || status.includes("대기")) {
-            return <div className={`${baseClass} text-white`}>탑승준비</div>;
+            return <div className={`${baseClass} text-white`}><OverflowText text="탑승준비" /></div>;
         } else if (status.includes("마감") || status.includes("최종")) {
-            return <div className={`${baseClass} text-[#FFD700] animate-pulse`}>마감예정</div>;
+            return <div className={`${baseClass} text-[#FFD700] animate-pulse`}><OverflowText text="마감예정" /></div>;
         } else if (status.includes("지연")) {
-            return <div className={`${baseClass} bg-[#FF6D00] text-white`}>지연</div>;
+            return <div className={`${baseClass} bg-[#FF6D00] text-white`}><OverflowText text="지연" /></div>;
         } else if (status.includes("결항")) {
-            return <div className={`${baseClass} bg-[#D50000] text-white`}>결항</div>;
+            return <div className={`${baseClass} bg-[#D50000] text-white`}><OverflowText text="결항" /></div>;
         } else if (status.includes("출발") || status.includes("이륙") || status.includes("종료")) {
-            return <div className={`${baseClass} text-slate-400`}>{status}</div>;
+            return <div className={`${baseClass} text-slate-400`}><OverflowText text={status} /></div>;
         }
         return <div className={baseClass}></div>;
     };
@@ -626,7 +690,10 @@ function App() {
             : `${minutesSinceLastUpdate}분 전`;
 
     return (
-        <div className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none overflow-hidden relative">
+        <div
+            className="min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col justify-between select-none overflow-hidden relative"
+            style={{ "--fids-font-family": getFontFamily(fontFamily) }}
+        >
             
             {/* 🛠️ 시작 경고문구 (Disclaimer Modal) */}
             {showDisclaimer && (
@@ -705,25 +772,25 @@ function App() {
 
                 <div className="w-full overflow-x-auto overscroll-x-contain" aria-label="출발 항공편 전광판">
                     <div style={{...dynamicGridStyle, backgroundColor: tableHeaderColor}} className="border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
-                        <div className="flex items-center justify-center">시간</div>
-                        <div className="flex items-center justify-center">변경</div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="시간" /></div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="변경" /></div>
                         {flightFirst ? (
                             <React.Fragment>
-                                <div className="flex items-center justify-center">편명</div>
-                                <div className="text-center flex items-center justify-center">도착지</div>
+                                <div className="flex min-w-0 items-center justify-center"><OverflowText text="편명" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
                             </React.Fragment>
                         ) : (
                             <React.Fragment>
-                                <div className="text-center flex items-center justify-center">도착지</div>
-                                <div className="flex items-center justify-center">편명</div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
+                                <div className="flex min-w-0 items-center justify-center"><OverflowText text="편명" /></div>
                             </React.Fragment>
                         )}
                         
-                        {showTerminal && <div className="text-white flex items-center justify-center">터미널</div>}
-                        {showCheckin && <div className="text-white flex items-center justify-center">체크인</div>}
+                        {showTerminal && <div className="flex min-w-0 items-center justify-center text-white"><OverflowText text="터미널" /></div>}
+                        {showCheckin && <div className="flex min-w-0 items-center justify-center text-white"><OverflowText text="체크인" /></div>}
                         
-                        <div className="flex items-center justify-center">탑승구</div>
-                        <div className="flex items-center justify-center">현황</div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="탑승구" /></div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="현황" /></div>
                     </div>
 
                     <div className="divide-y divide-[#162e58]/20">
@@ -737,8 +804,8 @@ function App() {
                                 const currentCodeshareInfo = currentCodeshareId ? parseFlightId(currentCodeshareId) : null;
 
                                 const destinationCell = (
-                                    <div className="text-left pl-14 text-[#FFFFFF] truncate tracking-wide flex items-center">
-                                        {formatAirportName(flight.airport) || "---"}
+                                    <div className="flex min-w-0 items-center pl-14 text-left tracking-wide text-[#FFFFFF]">
+                                        <OverflowText text={formatAirportName(flight.airport) || "---"} />
                                     </div>
                                 );
 
@@ -752,9 +819,8 @@ function App() {
                                                     <AirlineLogo flightId={flight.flightId} rowHeight={rowHeight} slotWidth={scaledActualLogo} />
                                                 </div>
                                             )}
-                                            <div className="flex items-center shrink-0 overflow-hidden pl-2" style={{ width: `${scaledActualNum}px` }}>
-                                                <span className="text-white font-black text-left">{fltInfo.code}</span>
-                                                <span className="text-white text-left font-black whitespace-nowrap" style={{ marginLeft: '1ch' }}>{fltInfo.num}</span>
+                                            <div className="flex min-w-0 shrink-0 items-center overflow-hidden pl-2" style={{ width: `${scaledActualNum}px` }}>
+                                                <OverflowText text={`${fltInfo.code} ${fltInfo.num}`.trim()} className="justify-start text-left text-white" />
                                             </div>
                                         </div>
 
@@ -768,9 +834,8 @@ function App() {
                                                                 <AirlineLogo flightId={currentCodeshareId} rowHeight={rowHeight} slotWidth={scaledCodeLogo} />
                                                             </div>
                                                         )}
-                                                        <div className={`flex items-center shrink-0 overflow-hidden pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${scaledCodeNum}px` }}>
-                                                            <span className="text-white font-black">{currentCodeshareInfo.code}</span>
-                                                            <span className="text-white font-black whitespace-nowrap" style={{ marginLeft: '1ch' }}>{currentCodeshareInfo.num}</span>
+                                                        <div className={`flex min-w-0 shrink-0 items-center overflow-hidden pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${scaledCodeNum}px` }}>
+                                                            <OverflowText text={`${currentCodeshareInfo.code} ${currentCodeshareInfo.num}`.trim()} className="justify-start text-left text-white" />
                                                         </div>
                                                     </React.Fragment>
                                                 )}
@@ -782,10 +847,10 @@ function App() {
                                 return (
                                     <div key={idx} style={{ ...dynamicGridStyle, backgroundColor: currentRowBg }} className={`text-center items-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`}>
                                         
-                                        <div className="text-[#FFFFFF] text-center flex items-center justify-center">{schedTime}</div>
+                                        <div className="flex min-w-0 items-center justify-center text-center text-[#FFFFFF]"><OverflowText text={schedTime} /></div>
                                         
-                                        <div className={`text-center flex items-center justify-center ${highlightChange ? 'text-[#FACC15]' : 'text-white'}`}>
-                                            {renderEstimatedTime(flight)}
+                                        <div className={`flex min-w-0 items-center justify-center text-center ${highlightChange ? 'text-[#FACC15]' : 'text-white'}`}>
+                                            <OverflowText text={renderEstimatedTime(flight)} />
                                         </div>
                                         
                                         {flightFirst ? (
@@ -801,18 +866,18 @@ function App() {
                                         )}
                                         
                                         {showTerminal && (
-                                            <div className={`tracking-wide text-center flex items-center justify-center ${highlightTerminal ? 'text-[#FACC15]' : 'text-white'}`}>
-                                                {getTerminalInfo(flight.gateNumber, flight.terminalId)}
+                                            <div className={`flex min-w-0 items-center justify-center text-center tracking-wide ${highlightTerminal ? 'text-[#FACC15]' : 'text-white'}`}>
+                                                <OverflowText text={getTerminalInfo(flight.gateNumber, flight.terminalId)} />
                                             </div>
                                         )}
                                         
                                         {showCheckin && (
-                                            <div className={`tracking-wide text-center flex items-center justify-center ${highlightCheckin ? 'text-[#FACC15]' : 'text-white'}`}>
-                                                {flight.chkinRange || "—"}
+                                            <div className={`flex min-w-0 items-center justify-center text-center tracking-wide ${highlightCheckin ? 'text-[#FACC15]' : 'text-white'}`}>
+                                                <OverflowText text={flight.chkinRange || "—"} />
                                             </div>
                                         )}
                                         
-                                        <div className={`text-center flex items-center justify-center ${highlightGate ? 'text-[#FACC15]' : 'text-white'}`}>{flight.gateNumber || "—"}</div>
+                                        <div className={`flex min-w-0 items-center justify-center text-center ${highlightGate ? 'text-[#FACC15]' : 'text-white'}`}><OverflowText text={flight.gateNumber || "—"} /></div>
                                         
                                         <div className="h-full w-full flex items-center justify-center">
                                             {renderStatusAndStyle(flight.remark)}
@@ -929,7 +994,7 @@ function App() {
                                 id="size"
                                 isOpen={openConfigSection === "size"}
                             >
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                                 <div>
                                     <div className="flex justify-between">
                                         <span>페이지당 줄 개수</span>
@@ -951,6 +1016,18 @@ function App() {
                                     </div>
                                     <input type="range" min="14" max="48" value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
                                 </div>
+                                <label>
+                                    <span className="block mb-1">글꼴</span>
+                                    <select
+                                        value={fontFamily}
+                                        onChange={(e) => setFontFamily(e.target.value)}
+                                        className="h-9 w-full rounded border border-[#162e58] bg-[#051126] px-3 text-xs text-white outline-none focus:border-[#458cff]"
+                                    >
+                                        {FONT_OPTIONS.map((option) => (
+                                            <option key={option.id} value={option.id}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </label>
                             </div>
                             </SettingsSection>
 

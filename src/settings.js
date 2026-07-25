@@ -1,11 +1,60 @@
 export const SETTINGS_STORAGE_KEY = "fids_user_settings_v1";
 
+export const FONT_OPTIONS = Object.freeze([
+  {
+    id: "gulim",
+    label: "굴림체",
+    family: '"GulimChe", "굴림체", "Gulim", "Malgun Gothic", sans-serif'
+  },
+  {
+    id: "system",
+    label: "시스템 기본",
+    family: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Malgun Gothic", sans-serif'
+  },
+  {
+    id: "gothic",
+    label: "고딕",
+    family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Yu Gothic", sans-serif'
+  },
+  {
+    id: "serif",
+    label: "명조",
+    family: '"Noto Serif KR", "AppleMyungjo", "Batang", "Yu Mincho", serif'
+  },
+  {
+    id: "monospace",
+    label: "고정폭",
+    family: '"D2Coding", "NanumGothicCoding", "SFMono-Regular", Consolas, "Liberation Mono", monospace'
+  },
+  {
+    id: "arial",
+    label: "Arial",
+    family: 'Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'
+  },
+  {
+    id: "verdana",
+    label: "Verdana",
+    family: 'Verdana, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'
+  },
+  {
+    id: "tahoma",
+    label: "Tahoma",
+    family: 'Tahoma, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'
+  }
+]);
+
+export const getFontFamily = (fontId) => (
+  FONT_OPTIONS.find((option) => option.id === fontId)?.family
+  || FONT_OPTIONS[0].family
+);
+
 export const DEFAULT_SETTINGS = Object.freeze({
   itemsPerPage: 11,
   rowHeight: 55,
   fontSize: 24,
+  fontFamily: "gulim",
   pastHours: 6,
-  futureHours: 6,
+  futureHours: 12,
   apiSyncInterval: 10,
   flipInterval: 10,
   maxPages: 10,
@@ -88,6 +137,15 @@ export const loadUserSettings = () => {
           return [
             key,
             typeof savedValue === "string" && /^#[0-9a-f]{6}$/i.test(savedValue)
+              ? savedValue
+              : defaultValue
+          ];
+        }
+
+        if (key === "fontFamily") {
+          return [
+            key,
+            FONT_OPTIONS.some((option) => option.id === savedValue)
               ? savedValue
               : defaultValue
           ];

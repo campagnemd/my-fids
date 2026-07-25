@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 * {
-  font-family: "GulimChe", "굴림체", "Courier New", monospace !important;
+  font-family: var(--fids-font-family, "GulimChe", "굴림체", "Courier New", monospace) !important;
   font-weight: 900 !important;
 }
 
@@ -86,4 +86,58 @@ input[type="color"]::-webkit-color-swatch {
   font-family: ui-monospace, "Courier New", monospace !important;
   font-size: clamp(0.65rem, 45%, 1rem);
   letter-spacing: 0.06em;
+}
+
+.marquee-viewport {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.marquee-static {
+  display: inline-flex;
+  min-width: max-content;
+}
+
+.marquee-copy-static {
+  display: inline-block;
+  min-width: max-content;
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  min-width: max-content;
+  animation: marquee-scroll var(--marquee-duration, 8s) linear infinite;
+  will-change: transform;
+}
+
+.marquee-viewport.is-overflowing {
+  justify-content: flex-start;
+}
+
+.marquee-copy {
+  display: inline-block;
+  padding-right: 2.5em;
+  white-space: nowrap;
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
 }
