@@ -120,6 +120,10 @@ input[type="color"]::-webkit-color-swatch {
   justify-content: flex-start;
 }
 
+.marquee-viewport.is-left-aligned {
+  justify-content: flex-start;
+}
+
 .marquee-copy {
   display: inline-block;
   padding-right: 2.5em;
@@ -133,11 +137,5 @@ input[type="color"]::-webkit-color-swatch {
 
   to {
     transform: translateX(-50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .marquee-track {
-    animation: none;
   }
 }

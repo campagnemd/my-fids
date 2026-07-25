@@ -33,7 +33,7 @@ const formatAirportName = (airport) => (
 
 const SETTINGS_CATEGORIES = [
     { id: "time", title: "시간 및 동기화" },
-    { id: "size", title: "화면 크기" },
+    { id: "size", title: "화면 및 글꼴" },
     { id: "pages", title: "페이지 전환" },
     { id: "visibility", title: "표시 항목" },
     { id: "colors", title: "화면 색상" },
@@ -53,7 +53,7 @@ function SettingsSection({ id, isOpen, children }) {
     );
 }
 
-function OverflowText({ text, className = "" }) {
+function OverflowText({ text, align = "center", className = "" }) {
     const containerRef = useRef(null);
     const textRef = useRef(null);
     const [isOverflowing, setIsOverflowing] = useState(false);
@@ -66,7 +66,8 @@ function OverflowText({ text, className = "" }) {
 
         const checkOverflow = () => {
             if (isDisposed) return;
-            setIsOverflowing(textElement.scrollWidth > container.clientWidth + 1);
+            const textWidth = Math.ceil(textElement.getBoundingClientRect().width);
+            setIsOverflowing(textWidth > container.clientWidth + 1);
         };
 
         checkOverflow();
@@ -90,7 +91,7 @@ function OverflowText({ text, className = "" }) {
     return (
         <div
             ref={containerRef}
-            className={`marquee-viewport ${isOverflowing ? "is-overflowing" : ""} ${className}`}
+            className={`marquee-viewport ${align === "left" ? "is-left-aligned" : ""} ${isOverflowing ? "is-overflowing" : ""} ${className}`}
         >
             <div
                 className={isOverflowing ? "marquee-track" : "marquee-static"}
@@ -122,6 +123,10 @@ function App() {
     const [openConfigSection, setOpenConfigSection] = useState("time");
     const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
     const [showApiError, setShowApiError] = useState(false);
+    const boardRef = useRef(null);
+    const [boardWidth, setBoardWidth] = useState(() => (
+        typeof window === "undefined" ? 1920 : window.innerWidth
+    ));
     
     // 1. 디스플레이 제어
     const [itemsPerPage, setItemsPerPage] = useState(initialSettings.itemsPerPage);
@@ -295,6 +300,27 @@ function App() {
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
     }, [showConfig]);
+
+    useLayoutEffect(() => {
+        const board = boardRef.current;
+        if (!board) return undefined;
+
+        const updateBoardWidth = () => {
+            setBoardWidth(Math.max(1, Math.floor(board.getBoundingClientRect().width)));
+        };
+
+        updateBoardWidth();
+        const resizeObserver = typeof ResizeObserver === "undefined"
+            ? null
+            : new ResizeObserver(updateBoardWidth);
+        resizeObserver?.observe(board);
+        window.addEventListener("resize", updateBoardWidth);
+
+        return () => {
+            resizeObserver?.disconnect();
+            window.removeEventListener("resize", updateBoardWidth);
+        };
+    }, []);
 
     useEffect(() => {
         if (showDisclaimer) return; // 약관 동의 전에는 페이지 전환을 하지 않음
@@ -662,15 +688,45 @@ function App() {
     const codeshareColWidth = showCodeshare ? ((showLogo ? scaledCodeLogo : 0) + scaledCodeNum) : 0;
     const flightColWidth = actualColWidth + codeshareColWidth;
 
-    const destWidthStr = wDest === 0 ? 'minmax(40px, 1fr)' : `${scalePx(wDest)}px`;
+    const fixedColumnsWidth = timeColWidth
+        + changeColWidth
+        + flightColWidth
+        + (showTerminal ? terminalColWidth : 0)
+        + (showCheckin ? checkinColWidth : 0)
+        + gateColWidth
+        + statusColWidth;
+    const desiredDestWidth = wDest === 0
+        ? Math.max(40, boardWidth - fixedColumnsWidth)
+        : scalePx(wDest);
+    const desiredBoardWidth = fixedColumnsWidth + desiredDestWidth;
+    const responsiveScale = desiredBoardWidth > boardWidth
+        ? boardWidth / desiredBoardWidth
+        : 1;
+    const responsiveWidth = (width) => Math.max(0, width * responsiveScale);
+
+    const responsiveTimeWidth = responsiveWidth(timeColWidth);
+    const responsiveChangeWidth = responsiveWidth(changeColWidth);
+    const responsiveFlightWidth = responsiveWidth(flightColWidth);
+    const responsiveDestWidth = responsiveWidth(desiredDestWidth);
+    const responsiveTerminalWidth = responsiveWidth(terminalColWidth);
+    const responsiveCheckinWidth = responsiveWidth(checkinColWidth);
+    const responsiveGateWidth = responsiveWidth(gateColWidth);
+    const responsiveStatusWidth = responsiveWidth(statusColWidth);
+
+    const responsiveActualWidth = responsiveWidth(actualColWidth);
+    const responsiveCodeshareWidth = responsiveWidth(codeshareColWidth);
+    const responsiveActualLogoWidth = responsiveWidth(scaledActualLogo);
+    const responsiveActualNumWidth = responsiveWidth(scaledActualNum);
+    const responsiveCodeLogoWidth = responsiveWidth(scaledCodeLogo);
+    const responsiveCodeNumWidth = responsiveWidth(scaledCodeNum);
 
     let gridColsStructure = flightFirst
-        ? `${timeColWidth}px ${changeColWidth}px ${flightColWidth}px ${destWidthStr}`
-        : `${timeColWidth}px ${changeColWidth}px ${destWidthStr} ${flightColWidth}px`;
+        ? `${responsiveTimeWidth}px ${responsiveChangeWidth}px ${responsiveFlightWidth}px ${responsiveDestWidth}px`
+        : `${responsiveTimeWidth}px ${responsiveChangeWidth}px ${responsiveDestWidth}px ${responsiveFlightWidth}px`;
     
-    if (showTerminal) gridColsStructure += ` ${terminalColWidth}px`;
-    if (showCheckin) gridColsStructure += ` ${checkinColWidth}px`;
-    gridColsStructure += ` ${gateColWidth}px ${statusColWidth}px`;
+    if (showTerminal) gridColsStructure += ` ${responsiveTerminalWidth}px`;
+    if (showCheckin) gridColsStructure += ` ${responsiveCheckinWidth}px`;
+    gridColsStructure += ` ${responsiveGateWidth}px ${responsiveStatusWidth}px`;
 
     const dynamicGridStyle = {
         display: "grid",
@@ -770,19 +826,19 @@ function App() {
                     </header>
                 )}
 
-                <div className="w-full overflow-x-auto overscroll-x-contain" aria-label="출발 항공편 전광판">
+                <div ref={boardRef} className="w-full overflow-hidden" aria-label="출발 항공편 전광판">
                     <div style={{...dynamicGridStyle, backgroundColor: tableHeaderColor}} className="border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
                         <div className="flex min-w-0 items-center justify-center"><OverflowText text="시간" /></div>
                         <div className="flex min-w-0 items-center justify-center"><OverflowText text="변경" /></div>
                         {flightFirst ? (
                             <React.Fragment>
-                                <div className="flex min-w-0 items-center justify-center"><OverflowText text="편명" /></div>
-                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
+                                <div className="flex min-w-0 items-center pl-2 text-left"><OverflowText text="편명" align="left" /></div>
+                                <div className="flex min-w-0 items-center pl-3 text-left"><OverflowText text="도착지" align="left" /></div>
                             </React.Fragment>
                         ) : (
                             <React.Fragment>
-                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
-                                <div className="flex min-w-0 items-center justify-center"><OverflowText text="편명" /></div>
+                                <div className="flex min-w-0 items-center pl-3 text-left"><OverflowText text="도착지" align="left" /></div>
+                                <div className="flex min-w-0 items-center pl-2 text-left"><OverflowText text="편명" align="left" /></div>
                             </React.Fragment>
                         )}
                         
@@ -804,38 +860,38 @@ function App() {
                                 const currentCodeshareInfo = currentCodeshareId ? parseFlightId(currentCodeshareId) : null;
 
                                 const destinationCell = (
-                                    <div className="flex min-w-0 items-center pl-14 text-left tracking-wide text-[#FFFFFF]">
-                                        <OverflowText text={formatAirportName(flight.airport) || "---"} />
+                                    <div className="flex min-w-0 items-center overflow-hidden pl-3 text-left tracking-wide text-[#FFFFFF]">
+                                        <OverflowText text={formatAirportName(flight.airport) || "---"} align="left" />
                                     </div>
                                 );
 
                                 // 🛠️ 2. 코드쉐어 부분의 세로줄(border-l) CSS 제거
                                 const flightCell = (
-                                    <div className="flex items-center justify-start h-full w-full">
+                                    <div className="flex h-full min-w-0 items-center justify-start overflow-hidden">
                                         {/* 실제 운항편 영역 */}
-                                        <div className="flex items-center h-full overflow-hidden" style={{ width: `${actualColWidth}px` }}>
+                                        <div className="flex h-full min-w-0 items-center overflow-hidden" style={{ width: `${responsiveActualWidth}px` }}>
                                             {showLogo && (
-                                                <div className="shrink-0 flex items-center justify-start h-full py-[2px] pl-2" style={{ width: `${scaledActualLogo}px` }}>
-                                                    <AirlineLogo flightId={flight.flightId} rowHeight={rowHeight} slotWidth={scaledActualLogo} />
+                                                <div className="flex h-full min-w-0 shrink-0 items-center justify-start overflow-hidden py-[2px] pl-2" style={{ width: `${responsiveActualLogoWidth}px` }}>
+                                                    <AirlineLogo flightId={flight.flightId} rowHeight={rowHeight} slotWidth={responsiveActualLogoWidth} />
                                                 </div>
                                             )}
-                                            <div className="flex min-w-0 shrink-0 items-center overflow-hidden pl-2" style={{ width: `${scaledActualNum}px` }}>
-                                                <OverflowText text={`${fltInfo.code} ${fltInfo.num}`.trim()} className="justify-start text-left text-white" />
+                                            <div className="flex min-w-0 shrink-0 items-center overflow-hidden pl-2" style={{ width: `${responsiveActualNumWidth}px` }}>
+                                                <OverflowText text={`${fltInfo.code} ${fltInfo.num}`.trim()} align="left" className="text-left text-white" />
                                             </div>
                                         </div>
 
                                         {/* 공동 운항편 영역 (세로줄 제거됨) */}
                                         {showCodeshare && (
-                                            <div className="flex items-center justify-start h-full overflow-hidden" style={{ width: `${codeshareColWidth}px` }}>
+                                            <div className="flex h-full min-w-0 items-center justify-start overflow-hidden" style={{ width: `${responsiveCodeshareWidth}px` }}>
                                                 {currentCodeshareInfo && (
                                                     <React.Fragment>
                                                         {showLogo && (
-                                                            <div className={`shrink-0 flex items-center justify-start h-full py-[2px] pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${scaledCodeLogo}px` }}>
-                                                                <AirlineLogo flightId={currentCodeshareId} rowHeight={rowHeight} slotWidth={scaledCodeLogo} />
+                                                            <div className={`flex h-full min-w-0 shrink-0 items-center justify-start overflow-hidden py-[2px] pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${responsiveCodeLogoWidth}px` }}>
+                                                                <AirlineLogo flightId={currentCodeshareId} rowHeight={rowHeight} slotWidth={responsiveCodeLogoWidth} />
                                                             </div>
                                                         )}
-                                                        <div className={`flex min-w-0 shrink-0 items-center overflow-hidden pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${scaledCodeNum}px` }}>
-                                                            <OverflowText text={`${currentCodeshareInfo.code} ${currentCodeshareInfo.num}`.trim()} className="justify-start text-left text-white" />
+                                                        <div className={`flex min-w-0 shrink-0 items-center overflow-hidden pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${responsiveCodeNumWidth}px` }}>
+                                                            <OverflowText text={`${currentCodeshareInfo.code} ${currentCodeshareInfo.num}`.trim()} align="left" className="text-left text-white" />
                                                         </div>
                                                     </React.Fragment>
                                                 )}
