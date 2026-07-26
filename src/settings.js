@@ -165,7 +165,7 @@ export const getAutoLayoutSettings = (viewportWidth, viewportHeight) => {
   const logoTargetPixels = actualLogoPixels + extraColumnWidth;
   const flightNumberTargetPixels = actualNumPixels + extraColumnWidth;
   const gateTargetPixels = gatePixels + extraColumnWidth;
-  const statusTargetPixels = statusPixels + extraColumnWidth;
+  const statusTargetPixels = (statusPixels + extraColumnWidth) * 1.5;
 
   const wTime = toSetting(timeTargetPixels, 30, 300);
   const wChange = toSetting(changeTargetPixels, 30, 300);
