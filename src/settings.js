@@ -68,8 +68,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   rowHeight: 55,
   fontSize: 24,
   fontFamily: "system",
-  boldFont: true,
-  logoSize: 100,
+  boldFont: false,
+  logoSize: 97,
   pastHours: 6,
   futureHours: 12,
   apiSyncInterval: 10,
@@ -80,11 +80,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showTerminal: false,
   showCheckin: false,
   showCodeshare: false,
-  multilineCodeshare: false,
+  multilineCodeshare: true,
   showDeparted: false,
   showHeader: false,
   flightFirst: true,
-  attachFooterToRows: false,
+  attachFooterToRows: true,
   terminalFilter: "all",
   autoDestWidth: true,
   highlightChange: true,
@@ -118,7 +118,7 @@ const NUMBER_LIMITS = {
   itemsPerPage: [1, 100],
   rowHeight: [10, 200],
   fontSize: [5, 200],
-  logoSize: [10, 300],
+  logoSize: [10, 355],
   pastHours: [1, 24],
   futureHours: [1, 24],
   apiSyncInterval: [5, 30],
@@ -145,7 +145,7 @@ export const getAutoLayoutSettings = (viewportWidth, viewportHeight) => {
   const height = Math.max(240, Number(viewportHeight) || 1080);
   const rowHeight = clamp(height / 15, 10, 200);
   const fontSize = clamp(Math.min(rowHeight * 0.44, width / 32), 5, rowHeight);
-  const logoSize = clamp(Math.min(100, width * 0.12), 10, 300);
+  const logoSize = clamp(Math.min(100, width * 0.12, Math.floor(rowHeight * (16 / 9))), 10, 355);
   const itemsPerPage = clamp(Math.floor(height / rowHeight) - 2, 1, 100);
   const rowScale = rowHeight / 55;
   const toSetting = (pixels, min, max) => clamp(pixels / rowScale, min, max);

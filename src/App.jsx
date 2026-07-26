@@ -9,6 +9,7 @@ import {
     saveUserSettings
 } from "./settings";
 import AirlineLogo from "./AirlineLogo";
+import { buildDisplayFlights } from "./displayFlights";
 
 const getShortTimeString = (dateObj) => {
     const hh = String(dateObj.getHours()).padStart(2, "0");
@@ -387,11 +388,21 @@ function App() {
         if (fontSize > rowHeight) setFontSize(rowHeight);
     }, [fontSize, rowHeight]);
 
+    const maxLogoSize = Math.max(10, Math.floor(rowHeight * (16 / 9)));
+    useEffect(() => {
+        if (logoSize > maxLogoSize) setLogoSize(maxLogoSize);
+    }, [logoSize, maxLogoSize]);
+
     const filteredFlightsRef = useRef([]);
     const apiRetryTimerRef = useRef(null);
     useEffect(() => {
-        filteredFlightsRef.current = filteredFlights;
-    }, [filteredFlights]);
+        filteredFlightsRef.current = buildDisplayFlights(
+            filteredFlights,
+            showCodeshare,
+            multilineCodeshare
+        );
+        setCurrentPage(0);
+    }, [filteredFlights, showCodeshare, multilineCodeshare]);
 
     useEffect(() => {
         const clockTimer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -722,8 +733,9 @@ function App() {
         });
     }, [currentMinute, flights, showDeparted, pastHours, futureHours, terminalFilter]);
 
-    const pageData = filteredFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
-    const totalPages = Math.min(Math.ceil(filteredFlights.length / itemsPerPage), maxPages);
+    const displayFlights = buildDisplayFlights(filteredFlights, showCodeshare, multilineCodeshare);
+    const pageData = displayFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
+    const totalPages = Math.min(Math.ceil(displayFlights.length / itemsPerPage), maxPages);
 
     const formatTime = (timeStr) => {
         if (!timeStr) return "--:--";
@@ -962,10 +974,9 @@ function App() {
                                 const schedTime = formatTime(flight.scheduleDatetime || flight.scheduleDateTime);
                                 const codeshareList = flight.codeshareList || [];
                                 const currentCodeshareId = codeshareList.length > 0 ? codeshareList[codeshareIndex % codeshareList.length] : null;
-                                const flightIds = [flight.flightId, ...codeshareList];
-                                const flightPairs = Array.from(
-                                    { length: Math.ceil(flightIds.length / 2) },
-                                    (_, pairIndex) => flightIds.slice(pairIndex * 2, pairIndex * 2 + 2)
+                                const leftFlightId = flight.displayFlightIds?.[0] || flight.flightId;
+                                const rightFlightId = flight.displayFlightIds?.[1] || (
+                                    multilineCodeshare ? null : currentCodeshareId
                                 );
 
                                 const renderFlightSlot = (flightId, side, shouldFade = false) => {
@@ -988,7 +999,7 @@ function App() {
                                                     className={`flex h-full min-w-0 shrink-0 items-center justify-start overflow-hidden pl-2 ${fadeClass}`}
                                                     style={{ width: `${logoSlotWidth}px` }}
                                                 >
-                                                    <AirlineLogo flightId={flightId} logoSize={logoSize} />
+                                                    <AirlineLogo flightId={flightId} logoSize={Math.min(logoSize, maxLogoSize)} />
                                                 </div>
                                             )}
                                             {info && (
@@ -1009,31 +1020,19 @@ function App() {
                                     </div>
                                 );
 
-                                const flightCell = multilineCodeshare && showCodeshare && flightPairs.length > 1 ? (
-                                    <div className="flex h-full min-w-0 flex-col justify-start overflow-hidden">
-                                        {flightPairs.map((pair, pairIndex) => (
-                                            <div
-                                                key={`${flight.flightId}-${pairIndex}`}
-                                                className="flex min-h-0 min-w-0 items-center overflow-hidden"
-                                                style={{
-                                                    height: `${100 / flightPairs.length}%`,
-                                                    lineHeight: `${rowHeight / flightPairs.length}px`
-                                                }}
-                                            >
-                                                {renderFlightSlot(pair[0], "left")}
-                                                {renderFlightSlot(pair[1], "right")}
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
+                                const flightCell = (
                                     <div className="flex h-full min-w-0 items-center justify-start overflow-hidden">
-                                        {renderFlightSlot(flight.flightId, "left")}
-                                        {showCodeshare && renderFlightSlot(currentCodeshareId, "right", true)}
+                                        {renderFlightSlot(leftFlightId, "left")}
+                                        {showCodeshare && renderFlightSlot(
+                                            rightFlightId,
+                                            "right",
+                                            !multilineCodeshare
+                                        )}
                                     </div>
                                 );
                                 
                                 return (
-                                    <div key={idx} style={{ ...dynamicGridStyle, backgroundColor: currentRowBg }} className={`text-center items-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`}>
+                                    <div key={flight.displayRowKey || `${flight.flightId}-${idx}`} style={{ ...dynamicGridStyle, backgroundColor: currentRowBg }} className={`text-center items-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`}>
                                         
                                         <div className="flex min-w-0 items-center justify-center text-center text-[#FFFFFF]"><OverflowText text={schedTime} /></div>
                                         
@@ -1186,7 +1185,7 @@ function App() {
                                 <NumericRange label="페이지당 줄 개수" value={itemsPerPage} onChange={setItemsPerPage} min={1} max={100} unit="행" />
                                 <NumericRange label="행 높이" value={rowHeight} onChange={setRowHeight} min={10} max={200} />
                                 <NumericRange label="글자 크기" value={fontSize} onChange={setFontSize} min={5} max={rowHeight} />
-                                <NumericRange label="로고 크기" value={logoSize} onChange={setLogoSize} min={10} max={300} />
+                                <NumericRange label="로고 크기" value={logoSize} onChange={setLogoSize} min={10} max={maxLogoSize} />
                                 <label>
                                     <span className="block mb-1">글꼴</span>
                                     <select
