@@ -235,6 +235,8 @@ function App() {
     const [highlightCheckin, setHighlightCheckin] = useState(initialSettings.highlightCheckin);
     const [highlightGate, setHighlightGate] = useState(initialSettings.highlightGate);
     const [highlightCurrentTime, setHighlightCurrentTime] = useState(initialSettings.highlightCurrentTime);
+    const [blinkBoardingStatus, setBlinkBoardingStatus] = useState(initialSettings.blinkBoardingStatus);
+    const [blinkClosingStatus, setBlinkClosingStatus] = useState(initialSettings.blinkClosingStatus);
 
     // 3-2. 코드쉐어 회전 간격 (초)
     const [codeshareFlipInterval, setCodeshareFlipInterval] = useState(initialSettings.codeshareFlipInterval);
@@ -295,6 +297,8 @@ function App() {
             highlightCheckin,
             highlightGate,
             highlightCurrentTime,
+            blinkBoardingStatus,
+            blinkClosingStatus,
             codeshareFlipInterval,
             headerColor,
             tableHeaderColor,
@@ -322,6 +326,7 @@ function App() {
         showCheckin, showCodeshare, multilineCodeshare, showDeparted, showHeader, flightFirst,
         attachFooterToRows, terminalFilter, autoDestWidth,
         highlightChange, highlightTerminal, highlightCheckin, highlightGate, highlightCurrentTime,
+        blinkBoardingStatus, blinkClosingStatus,
         codeshareFlipInterval, headerColor, tableHeaderColor, footerColor,
         oddRowColor, evenRowColor, delayedStatusColor, cancelledStatusColor, highlightTextColor,
         wTime, wChange, wActualLogo, wActualNum,
@@ -361,6 +366,8 @@ function App() {
         setHighlightCheckin(DEFAULT_SETTINGS.highlightCheckin);
         setHighlightGate(DEFAULT_SETTINGS.highlightGate);
         setHighlightCurrentTime(DEFAULT_SETTINGS.highlightCurrentTime);
+        setBlinkBoardingStatus(DEFAULT_SETTINGS.blinkBoardingStatus);
+        setBlinkClosingStatus(DEFAULT_SETTINGS.blinkClosingStatus);
         setCodeshareFlipInterval(DEFAULT_SETTINGS.codeshareFlipInterval);
         setHeaderColor(DEFAULT_SETTINGS.headerColor);
         setTableHeaderColor(DEFAULT_SETTINGS.tableHeaderColor);
@@ -761,11 +768,11 @@ function App() {
         const baseClass = "w-full h-full flex items-center justify-center font-black text-center ";
         
         if (status.includes("탑승중")) {
-            return <div className={`${baseClass} text-white animate-pulse`}><OverflowText text="탑승중" /></div>;
+            return <div className={`${baseClass} text-white ${blinkBoardingStatus ? "animate-pulse" : ""}`}><OverflowText text="탑승중" /></div>;
         } else if (status.includes("준비") || status.includes("대기")) {
             return <div className={`${baseClass} text-white`}><OverflowText text="탑승준비" /></div>;
         } else if (status.includes("마감") || status.includes("최종")) {
-            return <div className={`${baseClass} text-[#FFD700] animate-pulse`}><OverflowText text="마감예정" /></div>;
+            return <div className={`${baseClass} text-[#FFD700] ${blinkClosingStatus ? "animate-pulse" : ""}`}><OverflowText text="마감예정" /></div>;
         } else if (status.includes("지연")) {
             return <div className={`${baseClass} text-white`} style={{ backgroundColor: delayedStatusColor }}><OverflowText text="지연" /></div>;
         } else if (status.includes("결항")) {
@@ -1453,6 +1460,22 @@ function App() {
                                         <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${highlightCurrentTime ? 'transform translate-x-4' : ''}`}></div>
                                     </div>
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${highlightCurrentTime ? 'text-[#FACC15]' : 'text-slate-400'}`}>현재시간 강조</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={blinkBoardingStatus} onChange={() => setBlinkBoardingStatus(!blinkBoardingStatus)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${blinkBoardingStatus ? 'bg-[#FACC15]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${blinkBoardingStatus ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${blinkBoardingStatus ? 'text-[#FACC15]' : 'text-slate-400'}`}>탑승중 깜박임</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={blinkClosingStatus} onChange={() => setBlinkClosingStatus(!blinkClosingStatus)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${blinkClosingStatus ? 'bg-[#FACC15]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${blinkClosingStatus ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${blinkClosingStatus ? 'text-[#FACC15]' : 'text-slate-400'}`}>마감예정 깜박임</span>
                                 </label>
                             </div>
                             </SettingsSection>

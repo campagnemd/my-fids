@@ -68,7 +68,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   rowHeight: 55,
   fontSize: 24,
   fontFamily: "system",
-  boldFont: false,
+  boldFont: true,
   logoSize: 97,
   pastHours: 6,
   futureHours: 12,
@@ -79,7 +79,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showLogo: true,
   showTerminal: false,
   showCheckin: false,
-  showCodeshare: false,
+  showCodeshare: true,
   multilineCodeshare: true,
   showDeparted: false,
   showHeader: false,
@@ -92,6 +92,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   highlightCheckin: true,
   highlightGate: true,
   highlightCurrentTime: true,
+  blinkBoardingStatus: false,
+  blinkClosingStatus: false,
   codeshareFlipInterval: 2,
   headerColor: "#2f6bca",
   tableHeaderColor: "#000000",
@@ -148,6 +150,7 @@ export const getAutoLayoutSettings = (viewportWidth, viewportHeight) => {
   const logoSize = clamp(Math.min(100, width * 0.12, Math.floor(rowHeight * (16 / 9))), 10, 355);
   const itemsPerPage = clamp(Math.floor(height / rowHeight) - 2, 1, 100);
   const rowScale = rowHeight / 55;
+  const extraColumnWidth = 10;
   const toSetting = (pixels, min, max) => clamp(pixels / rowScale, min, max);
 
   const timePixels = fontSize * 3.7 + 14;
@@ -157,16 +160,29 @@ export const getAutoLayoutSettings = (viewportWidth, viewportHeight) => {
   const gatePixels = fontSize * 3.3 + 14;
   const statusPixels = fontSize * 4.2 + 14;
 
-  const wTime = toSetting(timePixels, 30, 300);
-  const wChange = toSetting(changePixels, 30, 300);
-  const wActualLogo = toSetting(actualLogoPixels, 20, 150);
-  const wActualNum = toSetting(actualNumPixels, 30, 300);
+  const timeTargetPixels = timePixels + extraColumnWidth;
+  const changeTargetPixels = changePixels + extraColumnWidth;
+  const logoTargetPixels = actualLogoPixels + extraColumnWidth;
+  const flightNumberTargetPixels = actualNumPixels + extraColumnWidth;
+  const gateTargetPixels = gatePixels + extraColumnWidth;
+  const statusTargetPixels = statusPixels + extraColumnWidth;
+
+  const wTime = toSetting(timeTargetPixels, 30, 300);
+  const wChange = toSetting(changeTargetPixels, 30, 300);
+  const wActualLogo = toSetting(logoTargetPixels, 20, 150);
+  const wActualNum = toSetting(flightNumberTargetPixels, 30, 300);
   const wCodeLogo = wActualLogo;
   const wCodeNum = wActualNum;
-  const wGate = toSetting(gatePixels, 30, 300);
-  const wStatus = toSetting(statusPixels, 30, 400);
+  const wGate = toSetting(gateTargetPixels, 30, 300);
+  const wStatus = toSetting(statusTargetPixels, 30, 400);
   const wDest = toSetting(
-    width - timePixels - changePixels - actualLogoPixels - actualNumPixels - gatePixels - statusPixels,
+    width
+      - timeTargetPixels
+      - changeTargetPixels
+      - logoTargetPixels * 2
+      - flightNumberTargetPixels * 2
+      - gateTargetPixels
+      - statusTargetPixels,
     30,
     800
   );
@@ -183,8 +199,8 @@ export const getAutoLayoutSettings = (viewportWidth, viewportHeight) => {
     wCodeLogo,
     wCodeNum,
     wDest,
-    wTerminal: toSetting(fontSize * 4.2 + 14, 30, 300),
-    wCheckin: toSetting(fontSize * 6.2 + 14, 30, 400),
+    wTerminal: toSetting(fontSize * 4.2 + 14 + extraColumnWidth, 30, 300),
+    wCheckin: toSetting(fontSize * 6.2 + 14 + extraColumnWidth, 30, 400),
     wGate,
     wStatus
   };
