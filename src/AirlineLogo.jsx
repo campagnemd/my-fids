@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { getAirline } from "./airlines";
 
-export default function AirlineLogo({ flightId, rowHeight, slotWidth }) {
+export default function AirlineLogo({ flightId, logoSize }) {
   const airline = getAirline(flightId);
   const [imageFailed, setImageFailed] = useState(false);
-  const maxHeight = Math.max(18, rowHeight * 0.89);
-  const width = Math.max(20, Math.min(slotWidth - 4, maxHeight * (16 / 9)));
+  const width = Math.max(10, logoSize);
 
   useEffect(() => {
     setImageFailed(false);

@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 * {
-  font-family: var(--fids-font-family, "GulimChe", "굴림체", "Courier New", monospace) !important;
-  font-weight: 900 !important;
+  font-family: var(--fids-font-family, system-ui, -apple-system, sans-serif) !important;
+  font-weight: var(--fids-font-weight, 900) !important;
 }
 
 html,
@@ -64,6 +64,7 @@ input[type="color"]::-webkit-color-swatch {
 .airline-logo-fallback {
   display: inline-flex;
   flex: 0 0 auto;
+  max-width: none;
   overflow: hidden;
   align-items: center;
   justify-content: center;

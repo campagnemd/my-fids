@@ -3,6 +3,7 @@ import {
     DEFAULT_SETTINGS,
     FONT_OPTIONS,
     clearUserSettings,
+    getAutoLayoutSettings,
     getFontFamily,
     loadUserSettings,
     saveUserSettings
@@ -203,6 +204,8 @@ function App() {
     const [rowHeight, setRowHeight] = useState(initialSettings.rowHeight);
     const [fontSize, setFontSize] = useState(initialSettings.fontSize);
     const [fontFamily, setFontFamily] = useState(initialSettings.fontFamily);
+    const [boldFont, setBoldFont] = useState(initialSettings.boldFont);
+    const [logoSize, setLogoSize] = useState(initialSettings.logoSize);
     
     // 2. 시간/타이머/페이드 제어
     const [pastHours, setPastHours] = useState(initialSettings.pastHours);
@@ -218,6 +221,7 @@ function App() {
     const [showTerminal, setShowTerminal] = useState(initialSettings.showTerminal);
     const [showCheckin, setShowCheckin] = useState(initialSettings.showCheckin);
     const [showCodeshare, setShowCodeshare] = useState(initialSettings.showCodeshare);
+    const [multilineCodeshare, setMultilineCodeshare] = useState(initialSettings.multilineCodeshare);
     const [showDeparted, setShowDeparted] = useState(initialSettings.showDeparted);
     const [showHeader, setShowHeader] = useState(initialSettings.showHeader);
     const [flightFirst, setFlightFirst] = useState(initialSettings.flightFirst);
@@ -266,6 +270,8 @@ function App() {
             rowHeight,
             fontSize,
             fontFamily,
+            boldFont,
+            logoSize,
             pastHours,
             futureHours,
             apiSyncInterval,
@@ -276,6 +282,7 @@ function App() {
             showTerminal,
             showCheckin,
             showCodeshare,
+            multilineCodeshare,
             showDeparted,
             showHeader,
             flightFirst,
@@ -309,9 +316,9 @@ function App() {
             wStatus
         });
     }, [
-        itemsPerPage, rowHeight, fontSize, fontFamily, pastHours, futureHours, apiSyncInterval,
+        itemsPerPage, rowHeight, fontSize, fontFamily, boldFont, logoSize, pastHours, futureHours, apiSyncInterval,
         flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
-        showCheckin, showCodeshare, showDeparted, showHeader, flightFirst,
+        showCheckin, showCodeshare, multilineCodeshare, showDeparted, showHeader, flightFirst,
         attachFooterToRows, terminalFilter, autoDestWidth,
         highlightChange, highlightTerminal, highlightCheckin, highlightGate, highlightCurrentTime,
         codeshareFlipInterval, headerColor, tableHeaderColor, footerColor,
@@ -324,10 +331,13 @@ function App() {
         if (!window.confirm("설정을 기본값으로 초기화하시겠습니까?")) return;
 
         clearUserSettings();
-        setItemsPerPage(DEFAULT_SETTINGS.itemsPerPage);
-        setRowHeight(DEFAULT_SETTINGS.rowHeight);
-        setFontSize(DEFAULT_SETTINGS.fontSize);
+        const autoLayout = getAutoLayoutSettings(window.innerWidth, window.innerHeight);
+        setItemsPerPage(autoLayout.itemsPerPage);
+        setRowHeight(autoLayout.rowHeight);
+        setFontSize(autoLayout.fontSize);
         setFontFamily(DEFAULT_SETTINGS.fontFamily);
+        setBoldFont(DEFAULT_SETTINGS.boldFont);
+        setLogoSize(autoLayout.logoSize);
         setPastHours(DEFAULT_SETTINGS.pastHours);
         setFutureHours(DEFAULT_SETTINGS.futureHours);
         setApiSyncInterval(DEFAULT_SETTINGS.apiSyncInterval);
@@ -338,6 +348,7 @@ function App() {
         setShowTerminal(DEFAULT_SETTINGS.showTerminal);
         setShowCheckin(DEFAULT_SETTINGS.showCheckin);
         setShowCodeshare(DEFAULT_SETTINGS.showCodeshare);
+        setMultilineCodeshare(DEFAULT_SETTINGS.multilineCodeshare);
         setShowDeparted(DEFAULT_SETTINGS.showDeparted);
         setShowHeader(DEFAULT_SETTINGS.showHeader);
         setFlightFirst(DEFAULT_SETTINGS.flightFirst);
@@ -358,19 +369,23 @@ function App() {
         setDelayedStatusColor(DEFAULT_SETTINGS.delayedStatusColor);
         setCancelledStatusColor(DEFAULT_SETTINGS.cancelledStatusColor);
         setHighlightTextColor(DEFAULT_SETTINGS.highlightTextColor);
-        setWTime(DEFAULT_SETTINGS.wTime);
-        setWChange(DEFAULT_SETTINGS.wChange);
-        setWActualLogo(DEFAULT_SETTINGS.wActualLogo);
-        setWActualNum(DEFAULT_SETTINGS.wActualNum);
-        setWCodeLogo(DEFAULT_SETTINGS.wCodeLogo);
-        setWCodeNum(DEFAULT_SETTINGS.wCodeNum);
-        setWDest(DEFAULT_SETTINGS.wDest);
-        setWTerminal(DEFAULT_SETTINGS.wTerminal);
-        setWCheckin(DEFAULT_SETTINGS.wCheckin);
-        setWGate(DEFAULT_SETTINGS.wGate);
-        setWStatus(DEFAULT_SETTINGS.wStatus);
+        setWTime(autoLayout.wTime);
+        setWChange(autoLayout.wChange);
+        setWActualLogo(autoLayout.wActualLogo);
+        setWActualNum(autoLayout.wActualNum);
+        setWCodeLogo(autoLayout.wCodeLogo);
+        setWCodeNum(autoLayout.wCodeNum);
+        setWDest(autoLayout.wDest);
+        setWTerminal(autoLayout.wTerminal);
+        setWCheckin(autoLayout.wCheckin);
+        setWGate(autoLayout.wGate);
+        setWStatus(autoLayout.wStatus);
         setCurrentPage(0);
     };
+
+    useEffect(() => {
+        if (fontSize > rowHeight) setFontSize(rowHeight);
+    }, [fontSize, rowHeight]);
 
     const filteredFlightsRef = useRef([]);
     const apiRetryTimerRef = useRef(null);
@@ -439,7 +454,7 @@ function App() {
     }, [itemsPerPage, maxPages, flipInterval, smoothTransition, showDisclaimer]);
 
     useEffect(() => {
-        if (showDisclaimer) return; 
+        if (showDisclaimer || multilineCodeshare) return undefined;
         const codeshareTimer = setInterval(() => {
             if (smoothTransition) {
                 setIsCodeshareFading(true);
@@ -453,7 +468,7 @@ function App() {
         }, codeshareFlipInterval * 1000);
 
         return () => clearInterval(codeshareTimer);
-    }, [codeshareFlipInterval, smoothTransition, showDisclaimer]);
+    }, [codeshareFlipInterval, multilineCodeshare, smoothTransition, showDisclaimer]);
 
     const fetchSingleDayData = useCallback(async (dateStr, forceRefresh) => {
         const cacheKey = `fids_raw_data_${dateStr}`;
@@ -837,6 +852,7 @@ function App() {
             className={`min-h-screen bg-[#051126] text-[#F8FAFC] flex flex-col select-none overflow-hidden relative ${attachFooterToRows ? "justify-start" : "justify-between"}`}
             style={{
                 "--fids-font-family": getFontFamily(fontFamily),
+                "--fids-font-weight": boldFont ? 900 : 400,
                 "--highlight-text-color": highlightTextColor
             }}
         >
@@ -943,11 +959,49 @@ function App() {
                         {pageData.length > 0 ? (
                             pageData.map((flight, idx) => {
                                 const currentRowBg = idx % 2 === 0 ? oddRowColor : evenRowColor;
-                                const fltInfo = parseFlightId(flight.flightId);
                                 const schedTime = formatTime(flight.scheduleDatetime || flight.scheduleDateTime);
                                 const codeshareList = flight.codeshareList || [];
                                 const currentCodeshareId = codeshareList.length > 0 ? codeshareList[codeshareIndex % codeshareList.length] : null;
-                                const currentCodeshareInfo = currentCodeshareId ? parseFlightId(currentCodeshareId) : null;
+                                const flightIds = [flight.flightId, ...codeshareList];
+                                const flightPairs = Array.from(
+                                    { length: Math.ceil(flightIds.length / 2) },
+                                    (_, pairIndex) => flightIds.slice(pairIndex * 2, pairIndex * 2 + 2)
+                                );
+
+                                const renderFlightSlot = (flightId, side, shouldFade = false) => {
+                                    const isRight = side === "right";
+                                    const slotWidth = isRight ? responsiveCodeshareWidth : responsiveActualWidth;
+                                    const logoSlotWidth = isRight ? responsiveCodeLogoWidth : responsiveActualLogoWidth;
+                                    const numberSlotWidth = isRight ? responsiveCodeNumWidth : responsiveActualNumWidth;
+                                    const info = flightId ? parseFlightId(flightId) : null;
+                                    const fadeClass = shouldFade
+                                        ? `transition-opacity duration-300 ${isCodeshareFading ? "opacity-0" : "opacity-100"}`
+                                        : "";
+
+                                    return (
+                                        <div
+                                            className="flex h-full min-w-0 shrink-0 items-center overflow-hidden"
+                                            style={{ width: `${slotWidth}px` }}
+                                        >
+                                            {info && showLogo && (
+                                                <div
+                                                    className={`flex h-full min-w-0 shrink-0 items-center justify-start overflow-hidden pl-2 ${fadeClass}`}
+                                                    style={{ width: `${logoSlotWidth}px` }}
+                                                >
+                                                    <AirlineLogo flightId={flightId} logoSize={logoSize} />
+                                                </div>
+                                            )}
+                                            {info && (
+                                                <div
+                                                    className={`flex min-w-0 shrink-0 items-center overflow-hidden pl-2 ${fadeClass}`}
+                                                    style={{ width: `${numberSlotWidth}px` }}
+                                                >
+                                                    <OverflowText text={`${info.code} ${info.num}`.trim()} align="left" className="text-left text-white" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                };
 
                                 const destinationCell = (
                                     <div className="flex min-w-0 items-center overflow-hidden pl-3 text-left tracking-wide text-[#FFFFFF]">
@@ -955,38 +1009,26 @@ function App() {
                                     </div>
                                 );
 
-                                // 🛠️ 2. 코드쉐어 부분의 세로줄(border-l) CSS 제거
-                                const flightCell = (
+                                const flightCell = multilineCodeshare && showCodeshare && flightPairs.length > 1 ? (
+                                    <div className="flex h-full min-w-0 flex-col justify-start overflow-hidden">
+                                        {flightPairs.map((pair, pairIndex) => (
+                                            <div
+                                                key={`${flight.flightId}-${pairIndex}`}
+                                                className="flex min-h-0 min-w-0 items-center overflow-hidden"
+                                                style={{
+                                                    height: `${100 / flightPairs.length}%`,
+                                                    lineHeight: `${rowHeight / flightPairs.length}px`
+                                                }}
+                                            >
+                                                {renderFlightSlot(pair[0], "left")}
+                                                {renderFlightSlot(pair[1], "right")}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
                                     <div className="flex h-full min-w-0 items-center justify-start overflow-hidden">
-                                        {/* 실제 운항편 영역 */}
-                                        <div className="flex h-full min-w-0 items-center overflow-hidden" style={{ width: `${responsiveActualWidth}px` }}>
-                                            {showLogo && (
-                                                <div className="flex h-full min-w-0 shrink-0 items-center justify-start overflow-hidden py-[2px] pl-2" style={{ width: `${responsiveActualLogoWidth}px` }}>
-                                                    <AirlineLogo flightId={flight.flightId} rowHeight={rowHeight} slotWidth={responsiveActualLogoWidth} />
-                                                </div>
-                                            )}
-                                            <div className="flex min-w-0 shrink-0 items-center overflow-hidden pl-2" style={{ width: `${responsiveActualNumWidth}px` }}>
-                                                <OverflowText text={`${fltInfo.code} ${fltInfo.num}`.trim()} align="left" className="text-left text-white" />
-                                            </div>
-                                        </div>
-
-                                        {/* 공동 운항편 영역 (세로줄 제거됨) */}
-                                        {showCodeshare && (
-                                            <div className="flex h-full min-w-0 items-center justify-start overflow-hidden" style={{ width: `${responsiveCodeshareWidth}px` }}>
-                                                {currentCodeshareInfo && (
-                                                    <React.Fragment>
-                                                        {showLogo && (
-                                                            <div className={`flex h-full min-w-0 shrink-0 items-center justify-start overflow-hidden py-[2px] pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${responsiveCodeLogoWidth}px` }}>
-                                                                <AirlineLogo flightId={currentCodeshareId} rowHeight={rowHeight} slotWidth={responsiveCodeLogoWidth} />
-                                                            </div>
-                                                        )}
-                                                        <div className={`flex min-w-0 shrink-0 items-center overflow-hidden pl-2 transition-opacity duration-300 ${isCodeshareFading ? 'opacity-0' : 'opacity-100'}`} style={{ width: `${responsiveCodeNumWidth}px` }}>
-                                                            <OverflowText text={`${currentCodeshareInfo.code} ${currentCodeshareInfo.num}`.trim()} align="left" className="text-left text-white" />
-                                                        </div>
-                                                    </React.Fragment>
-                                                )}
-                                            </div>
-                                        )}
+                                        {renderFlightSlot(flight.flightId, "left")}
+                                        {showCodeshare && renderFlightSlot(currentCodeshareId, "right", true)}
                                     </div>
                                 );
                                 
@@ -1140,10 +1182,11 @@ function App() {
                                 id="size"
                                 isOpen={openConfigSection === "size"}
                             >
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                <NumericRange label="페이지당 줄 개수" value={itemsPerPage} onChange={setItemsPerPage} min={5} max={20} unit="행" />
-                                <NumericRange label="행 높이" value={rowHeight} onChange={setRowHeight} min={40} max={95} />
-                                <NumericRange label="글자 크기" value={fontSize} onChange={setFontSize} min={14} max={48} />
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                <NumericRange label="페이지당 줄 개수" value={itemsPerPage} onChange={setItemsPerPage} min={1} max={100} unit="행" />
+                                <NumericRange label="행 높이" value={rowHeight} onChange={setRowHeight} min={10} max={200} />
+                                <NumericRange label="글자 크기" value={fontSize} onChange={setFontSize} min={5} max={rowHeight} />
+                                <NumericRange label="로고 크기" value={logoSize} onChange={setLogoSize} min={10} max={300} />
                                 <label>
                                     <span className="block mb-1">글꼴</span>
                                     <select
@@ -1155,6 +1198,14 @@ function App() {
                                             <option key={option.id} value={option.id}>{option.label}</option>
                                         ))}
                                     </select>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={boldFont} onChange={() => setBoldFont(!boldFont)} />
+                                        <div className={`block h-3 w-7 rounded-full transition-colors ${boldFont ? "bg-[#4AF2A1]" : "bg-[#1b3a6d]"}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-white transition-transform ${boldFont ? "translate-x-4" : ""}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${boldFont ? "text-[#4AF2A1]" : "text-slate-400"}`}>글꼴 굵게</span>
                                 </label>
                             </div>
                             </SettingsSection>
@@ -1277,6 +1328,17 @@ function App() {
                                         <option value="all">전체</option>
                                         <option value="T1">T1만</option>
                                         <option value="T2">T2만</option>
+                                    </select>
+                                </label>
+                                <label className="flex items-center gap-3 text-[11px] tracking-wider text-slate-300">
+                                    <span className="shrink-0">공동운항 표시</span>
+                                    <select
+                                        value={multilineCodeshare ? "multi" : "single"}
+                                        onChange={(event) => setMultilineCodeshare(event.target.value === "multi")}
+                                        className="h-8 min-w-0 flex-1 rounded border border-[#162e58] bg-[#051126] px-2 text-xs text-white outline-none focus:border-[#458cff]"
+                                    >
+                                        <option value="single">한 줄</option>
+                                        <option value="multi">여러 줄</option>
                                     </select>
                                 </label>
                             </div>

@@ -2,11 +2,6 @@ export const SETTINGS_STORAGE_KEY = "fids_user_settings_v1";
 
 export const FONT_OPTIONS = Object.freeze([
   {
-    id: "gulim",
-    label: "굴림체",
-    family: '"GulimChe", "굴림체", "Gulim", "Malgun Gothic", sans-serif'
-  },
-  {
     id: "system",
     label: "시스템 기본",
     family: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Malgun Gothic", sans-serif'
@@ -14,32 +9,52 @@ export const FONT_OPTIONS = Object.freeze([
   {
     id: "gothic",
     label: "고딕",
-    family: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Yu Gothic", sans-serif'
+    family: '"고딕", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
   },
   {
-    id: "serif",
-    label: "명조",
-    family: '"Noto Serif KR", "AppleMyungjo", "Batang", "Yu Mincho", serif'
+    id: "gothicche",
+    label: "고딕체",
+    family: '"고딕체", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'
   },
   {
-    id: "monospace",
-    label: "고정폭",
-    family: '"D2Coding", "NanumGothicCoding", "SFMono-Regular", Consolas, "Liberation Mono", monospace'
+    id: "batang",
+    label: "바탕",
+    family: '"Batang", "바탕", "AppleMyungjo", serif'
   },
   {
-    id: "arial",
-    label: "Arial",
-    family: 'Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'
+    id: "batangche",
+    label: "바탕체",
+    family: '"BatangChe", "바탕체", "Batang", "AppleMyungjo", serif'
   },
   {
-    id: "verdana",
-    label: "Verdana",
-    family: 'Verdana, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'
+    id: "gulim",
+    label: "굴림",
+    family: '"Gulim", "굴림", "Malgun Gothic", sans-serif'
   },
   {
-    id: "tahoma",
-    label: "Tahoma",
-    family: 'Tahoma, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'
+    id: "gulimche",
+    label: "굴림체",
+    family: '"GulimChe", "굴림체", "Gulim", "Malgun Gothic", monospace'
+  },
+  {
+    id: "dotum",
+    label: "돋움",
+    family: '"Dotum", "돋움", "Malgun Gothic", sans-serif'
+  },
+  {
+    id: "dotumche",
+    label: "돋움체",
+    family: '"DotumChe", "돋움체", "Dotum", "Malgun Gothic", monospace'
+  },
+  {
+    id: "gungsuh",
+    label: "궁서",
+    family: '"Gungsuh", "궁서", "Batang", serif'
+  },
+  {
+    id: "gungsuhche",
+    label: "궁서체",
+    family: '"GungsuhChe", "궁서체", "Gungsuh", "Batang", serif'
   }
 ]);
 
@@ -52,7 +67,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   itemsPerPage: 11,
   rowHeight: 55,
   fontSize: 24,
-  fontFamily: "gulim",
+  fontFamily: "system",
+  boldFont: true,
+  logoSize: 100,
   pastHours: 6,
   futureHours: 12,
   apiSyncInterval: 10,
@@ -63,6 +80,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showTerminal: false,
   showCheckin: false,
   showCodeshare: false,
+  multilineCodeshare: false,
   showDeparted: false,
   showHeader: false,
   flightFirst: true,
@@ -97,9 +115,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 const NUMBER_LIMITS = {
-  itemsPerPage: [5, 20],
-  rowHeight: [40, 95],
-  fontSize: [14, 48],
+  itemsPerPage: [1, 100],
+  rowHeight: [10, 200],
+  fontSize: [5, 200],
+  logoSize: [10, 300],
   pastHours: [1, 24],
   futureHours: [1, 24],
   apiSyncInterval: [5, 30],
@@ -119,11 +138,66 @@ const NUMBER_LIMITS = {
   wStatus: [30, 400]
 };
 
+const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.round(value)));
+
+export const getAutoLayoutSettings = (viewportWidth, viewportHeight) => {
+  const width = Math.max(320, Number(viewportWidth) || 1920);
+  const height = Math.max(240, Number(viewportHeight) || 1080);
+  const rowHeight = clamp(height / 15, 10, 200);
+  const fontSize = clamp(Math.min(rowHeight * 0.44, width / 32), 5, rowHeight);
+  const logoSize = clamp(Math.min(100, width * 0.12), 10, 300);
+  const itemsPerPage = clamp(Math.floor(height / rowHeight) - 2, 1, 100);
+  const rowScale = rowHeight / 55;
+  const toSetting = (pixels, min, max) => clamp(pixels / rowScale, min, max);
+
+  const timePixels = fontSize * 3.7 + 14;
+  const changePixels = fontSize * 3.7 + 14;
+  const actualLogoPixels = logoSize + 12;
+  const actualNumPixels = fontSize * 4.2 + 14;
+  const gatePixels = fontSize * 3.3 + 14;
+  const statusPixels = fontSize * 4.2 + 14;
+
+  const wTime = toSetting(timePixels, 30, 300);
+  const wChange = toSetting(changePixels, 30, 300);
+  const wActualLogo = toSetting(actualLogoPixels, 20, 150);
+  const wActualNum = toSetting(actualNumPixels, 30, 300);
+  const wCodeLogo = wActualLogo;
+  const wCodeNum = wActualNum;
+  const wGate = toSetting(gatePixels, 30, 300);
+  const wStatus = toSetting(statusPixels, 30, 400);
+  const wDest = toSetting(
+    width - timePixels - changePixels - actualLogoPixels - actualNumPixels - gatePixels - statusPixels,
+    30,
+    800
+  );
+
+  return {
+    itemsPerPage,
+    rowHeight,
+    fontSize,
+    logoSize,
+    wTime,
+    wChange,
+    wActualLogo,
+    wActualNum,
+    wCodeLogo,
+    wCodeNum,
+    wDest,
+    wTerminal: toSetting(fontSize * 4.2 + 14, 30, 300),
+    wCheckin: toSetting(fontSize * 6.2 + 14, 30, 400),
+    wGate,
+    wStatus
+  };
+};
+
 export const loadUserSettings = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY));
     if (!saved || typeof saved !== "object" || Array.isArray(saved)) {
-      return { ...DEFAULT_SETTINGS };
+      const viewport = typeof window === "undefined"
+        ? {}
+        : getAutoLayoutSettings(window.innerWidth, window.innerHeight);
+      return { ...DEFAULT_SETTINGS, ...viewport };
     }
 
     return Object.fromEntries(
