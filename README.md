@@ -6,6 +6,7 @@
 
 - `src/App.jsx`: 전광판 화면, 데이터 조회 및 관제 패널
 - `src/settings.js`: 기본 설정과 `localStorage` 저장·검증
+- `src/flightTranslations.js`: IATA 공항 코드별 영어·현지어 도착지명과 현황 번역
 - `src/airlines.js`: 인천공항 운항 항공사 IATA/ICAO 코드 및 로컬 로고 매핑
 - `src/AirlineLogo.jsx`: 16:9 로고 표시와 항공사 코드 폴백 배지
 - `src/styles.css`: Tailwind CSS와 공통 스타일
@@ -51,3 +52,7 @@ DATA_GO_KR_SERVICE_KEY=공공데이터포털_인증키
 로고는 흰색 16:9 직사각형 안에서 원본 비율을 유지한 채 축소·확대되므로 잘리지 않습니다. `/airlines/v1/*`에는 1년 브라우저 캐시를 적용하며, 로고 파일이 없거나 로드에 실패하면 항공사 코드 배지를 표시합니다.
 
 로고와 항공사 명칭의 권리는 각 항공사에 있습니다. 데이터 대조 출처는 [인천국제공항 취항정보](https://www.airport.kr/ap_ko/881/subview.do)와 [Flightradar24 airline database](https://www.flightradar24.com/data/airlines/)입니다. 로고를 교체할 때는 캐시 무효화를 위해 `v1` 디렉터리 버전도 함께 올립니다.
+
+## 다국어 표시
+
+전광판은 한국어를 첫 화면으로 표시한 뒤 설정에 따라 영어와 도착지 현지어를 순환합니다. 페이지 전환 간격은 활성화된 언어 수로 균등 분할하며, 한 언어 주기가 끝난 뒤 다음 페이지로 이동합니다. 도착지 번역은 최근 30일 출발편 API에서 확인한 IATA 공항 코드를 기준으로 관리합니다.

@@ -81,6 +81,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showCheckin: false,
   showCodeshare: true,
   multilineCodeshare: true,
+  showEnglish: true,
+  showDestinationLanguage: true,
   showDeparted: false,
   showHeader: false,
   flightFirst: true,

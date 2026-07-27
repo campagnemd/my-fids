@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     DEFAULT_SETTINGS,
     FONT_OPTIONS,
@@ -10,6 +10,11 @@ import {
 } from "./settings";
 import AirlineLogo from "./AirlineLogo";
 import { buildDisplayFlights } from "./displayFlights";
+import {
+    getDestinationName,
+    getStatusKey,
+    getStatusText
+} from "./flightTranslations";
 
 const getShortTimeString = (dateObj) => {
     const hh = String(dateObj.getHours()).padStart(2, "0");
@@ -223,11 +228,14 @@ function App() {
     const [showCheckin, setShowCheckin] = useState(initialSettings.showCheckin);
     const [showCodeshare, setShowCodeshare] = useState(initialSettings.showCodeshare);
     const [multilineCodeshare, setMultilineCodeshare] = useState(initialSettings.multilineCodeshare);
+    const [showEnglish, setShowEnglish] = useState(initialSettings.showEnglish);
+    const [showDestinationLanguage, setShowDestinationLanguage] = useState(initialSettings.showDestinationLanguage);
     const [showDeparted, setShowDeparted] = useState(initialSettings.showDeparted);
     const [showHeader, setShowHeader] = useState(initialSettings.showHeader);
     const [flightFirst, setFlightFirst] = useState(initialSettings.flightFirst);
     const [attachFooterToRows, setAttachFooterToRows] = useState(initialSettings.attachFooterToRows);
     const [terminalFilter, setTerminalFilter] = useState(initialSettings.terminalFilter);
+    const [displayLanguage, setDisplayLanguage] = useState("ko");
 
     // 3-1. 색상 강조 토글
     const [highlightChange, setHighlightChange] = useState(initialSettings.highlightChange);
@@ -286,6 +294,8 @@ function App() {
             showCheckin,
             showCodeshare,
             multilineCodeshare,
+            showEnglish,
+            showDestinationLanguage,
             showDeparted,
             showHeader,
             flightFirst,
@@ -323,7 +333,8 @@ function App() {
     }, [
         itemsPerPage, rowHeight, fontSize, fontFamily, boldFont, logoSize, pastHours, futureHours, apiSyncInterval,
         flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
-        showCheckin, showCodeshare, multilineCodeshare, showDeparted, showHeader, flightFirst,
+        showCheckin, showCodeshare, multilineCodeshare, showEnglish, showDestinationLanguage,
+        showDeparted, showHeader, flightFirst,
         attachFooterToRows, terminalFilter, autoDestWidth,
         highlightChange, highlightTerminal, highlightCheckin, highlightGate, highlightCurrentTime,
         blinkBoardingStatus, blinkClosingStatus,
@@ -355,6 +366,8 @@ function App() {
         setShowCheckin(DEFAULT_SETTINGS.showCheckin);
         setShowCodeshare(DEFAULT_SETTINGS.showCodeshare);
         setMultilineCodeshare(DEFAULT_SETTINGS.multilineCodeshare);
+        setShowEnglish(DEFAULT_SETTINGS.showEnglish);
+        setShowDestinationLanguage(DEFAULT_SETTINGS.showDestinationLanguage);
         setShowDeparted(DEFAULT_SETTINGS.showDeparted);
         setShowHeader(DEFAULT_SETTINGS.showHeader);
         setFlightFirst(DEFAULT_SETTINGS.flightFirst);
@@ -389,6 +402,7 @@ function App() {
         setWGate(autoLayout.wGate);
         setWStatus(autoLayout.wStatus);
         setCurrentPage(0);
+        setDisplayLanguage("ko");
     };
 
     useEffect(() => {
@@ -448,28 +462,55 @@ function App() {
         };
     }, []);
 
+    const displayLanguages = useMemo(() => [
+        "ko",
+        ...(showEnglish ? ["en"] : []),
+        ...(showDestinationLanguage ? ["destination"] : [])
+    ], [showEnglish, showDestinationLanguage]);
+    const languageStepDuration = (flipInterval * 1000) / displayLanguages.length;
+
+    useEffect(() => {
+        setDisplayLanguage("ko");
+    }, [showEnglish, showDestinationLanguage]);
+
     useEffect(() => {
         if (showDisclaimer) return; // 약관 동의 전에는 페이지 전환을 하지 않음
         const pageTimer = setInterval(() => {
             const totalItems = filteredFlightsRef.current.length;
-            if (totalItems > 0) {
-                const actualMaxPage = Math.ceil(totalItems / itemsPerPage);
-                const maxPageLimit = Math.min(actualMaxPage, maxPages); 
-                
-                if (smoothTransition) {
-                    setIsFading(true);
-                    setTimeout(() => {
-                        setCurrentPage(p => (p + 1) % (maxPageLimit || 1));
-                        setIsFading(false);
-                    }, 500); 
-                } else {
+            const actualMaxPage = Math.ceil(totalItems / itemsPerPage);
+            const maxPageLimit = Math.min(actualMaxPage, maxPages);
+            const currentLanguageIndex = displayLanguages.indexOf(displayLanguage);
+            const nextLanguageIndex = (currentLanguageIndex + 1) % displayLanguages.length;
+            const shouldAdvancePage = nextLanguageIndex === 0;
+
+            const advanceDisplay = () => {
+                setDisplayLanguage(displayLanguages[nextLanguageIndex]);
+                if (shouldAdvancePage && totalItems > 0) {
                     setCurrentPage(p => (p + 1) % (maxPageLimit || 1));
                 }
+            };
+
+            if (smoothTransition) {
+                setIsFading(true);
+                setTimeout(() => {
+                    advanceDisplay();
+                    setIsFading(false);
+                }, Math.min(500, languageStepDuration / 2));
+            } else {
+                advanceDisplay();
             }
-        }, flipInterval * 1000); 
+        }, languageStepDuration);
 
         return () => clearInterval(pageTimer);
-    }, [itemsPerPage, maxPages, flipInterval, smoothTransition, showDisclaimer]);
+    }, [
+        displayLanguage,
+        displayLanguages,
+        itemsPerPage,
+        languageStepDuration,
+        maxPages,
+        smoothTransition,
+        showDisclaimer
+    ]);
 
     useEffect(() => {
         if (showDisclaimer || multilineCodeshare) return undefined;
@@ -763,22 +804,24 @@ function App() {
         return { code: id.toUpperCase(), num: "" };
     };
 
-    const renderStatusAndStyle = (remark) => {
-        const status = remark || "정시";
+    const renderStatusAndStyle = (flight) => {
+        const status = flight.remark || "정시";
+        const statusKey = getStatusKey(status);
+        const statusText = getStatusText(statusKey, displayLanguage, flight.airportCode);
         const baseClass = "w-full h-full flex items-center justify-center font-black text-center ";
         
-        if (status.includes("탑승중")) {
-            return <div className={`${baseClass} text-white ${blinkBoardingStatus ? "animate-pulse" : ""}`}><OverflowText text="탑승중" /></div>;
-        } else if (status.includes("준비") || status.includes("대기")) {
-            return <div className={`${baseClass} text-white`}><OverflowText text="탑승준비" /></div>;
-        } else if (status.includes("마감") || status.includes("최종")) {
-            return <div className={`${baseClass} text-[#FFD700] ${blinkClosingStatus ? "animate-pulse" : ""}`}><OverflowText text="마감예정" /></div>;
-        } else if (status.includes("지연")) {
-            return <div className={`${baseClass} text-white`} style={{ backgroundColor: delayedStatusColor }}><OverflowText text="지연" /></div>;
-        } else if (status.includes("결항")) {
-            return <div className={`${baseClass} text-white`} style={{ backgroundColor: cancelledStatusColor }}><OverflowText text="결항" /></div>;
-        } else if (status.includes("출발") || status.includes("이륙") || status.includes("종료")) {
-            return <div className={`${baseClass} text-slate-400`}><OverflowText text={status} /></div>;
+        if (statusKey === "boarding") {
+            return <div className={`${baseClass} text-white ${blinkBoardingStatus ? "animate-pulse" : ""}`}><OverflowText text={statusText} /></div>;
+        } else if (statusKey === "goToGate") {
+            return <div className={`${baseClass} text-white`}><OverflowText text={statusText} /></div>;
+        } else if (statusKey === "finalCall") {
+            return <div className={`${baseClass} text-[#FFD700] ${blinkClosingStatus ? "animate-pulse" : ""}`}><OverflowText text={statusText} /></div>;
+        } else if (statusKey === "delayed") {
+            return <div className={`${baseClass} text-white`} style={{ backgroundColor: delayedStatusColor }}><OverflowText text={statusText} /></div>;
+        } else if (statusKey === "cancelled") {
+            return <div className={`${baseClass} text-white`} style={{ backgroundColor: cancelledStatusColor }}><OverflowText text={statusText} /></div>;
+        } else if (statusKey === "departed") {
+            return <div className={`${baseClass} text-slate-400`}><OverflowText text={statusText} /></div>;
         }
         return <div className={baseClass}></div>;
     };
@@ -857,6 +900,28 @@ function App() {
         fontSize: `${fontSize}px`,
         lineHeight: `${rowHeight}px`
     };
+    const isForeignLanguage = displayLanguage !== "ko";
+    const tableHeaders = isForeignLanguage
+        ? {
+            time: "Time",
+            change: "New",
+            flight: "Flight",
+            destination: "To",
+            terminal: "Terminal",
+            counter: "Counter",
+            gate: "Gate",
+            status: "Status"
+        }
+        : {
+            time: "시간",
+            change: "변경",
+            flight: "편명",
+            destination: "도착지",
+            terminal: "터미널",
+            counter: "카운터",
+            gate: "탑승구",
+            status: "현황"
+        };
     const minutesSinceLastUpdate = Number.isFinite(lastUpdatedAt)
         ? Math.max(0, Math.floor((currentTime.getTime() - lastUpdatedAt) / 60000))
         : null;
@@ -953,25 +1018,25 @@ function App() {
 
                 <div ref={boardRef} className="w-full overflow-hidden" aria-label="출발 항공편 전광판">
                     <div style={{...dynamicGridStyle, backgroundColor: tableHeaderColor}} className="border-b border-[#1b2d4a] text-white uppercase tracking-wider text-center">
-                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="시간" /></div>
-                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="변경" /></div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text={tableHeaders.time} /></div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text={tableHeaders.change} /></div>
                         {flightFirst ? (
                             <React.Fragment>
-                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="편명" /></div>
-                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text={tableHeaders.flight} /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text={tableHeaders.destination} /></div>
                             </React.Fragment>
                         ) : (
                             <React.Fragment>
-                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="도착지" /></div>
-                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text="편명" /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text={tableHeaders.destination} /></div>
+                                <div className="flex min-w-0 items-center justify-center text-center"><OverflowText text={tableHeaders.flight} /></div>
                             </React.Fragment>
                         )}
                         
-                        {showTerminal && <div className="flex min-w-0 items-center justify-center text-white"><OverflowText text="터미널" /></div>}
-                        {showCheckin && <div className="flex min-w-0 items-center justify-center text-white"><OverflowText text="체크인" /></div>}
+                        {showTerminal && <div className="flex min-w-0 items-center justify-center text-white"><OverflowText text={tableHeaders.terminal} /></div>}
+                        {showCheckin && <div className="flex min-w-0 items-center justify-center text-white"><OverflowText text={tableHeaders.counter} /></div>}
                         
-                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="탑승구" /></div>
-                        <div className="flex min-w-0 items-center justify-center"><OverflowText text="현황" /></div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text={tableHeaders.gate} /></div>
+                        <div className="flex min-w-0 items-center justify-center"><OverflowText text={tableHeaders.status} /></div>
                     </div>
 
                     <div className="divide-y divide-[#162e58]/20">
@@ -1023,7 +1088,14 @@ function App() {
 
                                 const destinationCell = (
                                     <div className="flex min-w-0 items-center overflow-hidden pl-3 text-left tracking-wide text-[#FFFFFF]">
-                                        <OverflowText text={formatAirportName(flight.airport) || "---"} align="left" />
+                                        <OverflowText
+                                            text={getDestinationName(
+                                                flight.airportCode,
+                                                formatAirportName(flight.airport),
+                                                displayLanguage
+                                            )}
+                                            align="left"
+                                        />
                                     </div>
                                 );
 
@@ -1074,7 +1146,7 @@ function App() {
                                         <div className="flex min-w-0 items-center justify-center text-center" style={{ color: highlightGate ? highlightTextColor : "#ffffff" }}><OverflowText text={flight.gateNumber || "—"} /></div>
                                         
                                         <div className="h-full w-full flex items-center justify-center">
-                                            {renderStatusAndStyle(flight.remark)}
+                                            {renderStatusAndStyle(flight)}
                                         </div>
                                     </div>
                                 );
@@ -1275,6 +1347,22 @@ function App() {
                                         <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${smoothTransition ? 'transform translate-x-4' : ''}`}></div>
                                     </div>
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${smoothTransition ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>부드러운 전환</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={showEnglish} onChange={() => setShowEnglish(!showEnglish)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${showEnglish ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${showEnglish ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showEnglish ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>영어 표시</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={showDestinationLanguage} onChange={() => setShowDestinationLanguage(!showDestinationLanguage)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${showDestinationLanguage ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${showDestinationLanguage ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showDestinationLanguage ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>도착지 언어 표시</span>
                                 </label>
                                 <label className="flex items-center cursor-pointer group">
                                     <div className="relative">
