@@ -945,7 +945,7 @@ function App() {
 
                         <div className="w-full text-center h-full flex items-center justify-center">
                             <span className="text-white tracking-wide" style={{ fontSize: `${fontSize}px` }}>
-                                출발
+                                출발 Departures
                             </span>
                         </div>
                     </header>
