@@ -77,7 +77,7 @@ export const DESTINATIONS = Object.freeze({
   IBR: destination("IBARAKI", "茨城", "ja"),
   ISG: destination("ISHIGAKI", "石垣", "ja"),
   IST: destination("ISTANBUL", "İSTANBUL", "tr"),
-  JFK: destination("NEW YORK/JFK", "NEW YORK/JFK", "en"),
+  JFK: destination("NEW YORK/J.F.KENNEDY", "NEW YORK/J.F.KENNEDY", "en"),
   KHH: destination("KAOHSIUNG", "高雄", "zh-TW"),
   KIJ: destination("NIIGATA", "新潟", "ja"),
   KIX: destination("OSAKA/KANSAI", "大阪/関西", "ja"),
@@ -120,7 +120,7 @@ export const DESTINATIONS = Object.freeze({
   PKX: destination("BEIJING/DAXING", "北京/大兴", "zh-CN"),
   PQC: destination("PHU QUOC", "PHÚ QUỐC", "vi"),
   PRG: destination("PRAGUE", "PRAHA", "cs"),
-  PUS: destination("BUSAN/GIMHAE", "김해", "ko"),
+  PUS: destination("BUSAN/GIMHAE", "부산/김해", "ko"),
   PVG: destination("SHANGHAI/PUDONG", "上海/浦东", "zh-CN"),
   RGN: destination("YANGON", "ရန်ကုန်", "my"),
   RMQ: destination("TAICHUNG", "臺中/清泉崗", "zh-TW"),
@@ -179,24 +179,24 @@ const STATUS_TEXT = Object.freeze({
   en: ["Departed", "Final Call", "Boarding", "Go To Gate", "Delayed", "Cancelled"],
   am: ["ተነስቷል", "የመጨረሻ ጥሪ", "በመሳፈር ላይ", "ወደ በር ይሂዱ", "ዘግይቷል", "ተሰርዟል"],
   ar: ["غادرت", "النداء الأخير", "صعود الطائرة", "توجه إلى البوابة", "متأخرة", "ملغاة"],
-  cs: ["Odletělo", "Poslední výzva", "Nástup", "Jděte k bráně", "Zpožděno", "Zrušeno"],
+  cs: ["Odletělo", "Poslední výzva", "Nástup", "Jděte k odletové bráně", "Zpožděno", "Zrušeno"],
   da: ["Afgået", "Sidste udkald", "Boarding", "Gå til gate", "Forsinket", "Aflyst"],
   de: ["Abgeflogen", "Letzter Aufruf", "Einsteigen", "Zum Gate", "Verspätet", "Annulliert"],
-  es: ["Salió", "Última llamada", "Embarcando", "Diríjase a la puerta", "Retrasado", "Cancelado"],
-  fi: ["Lähtenyt", "Viimeinen kuulutus", "Koneeseen nousu", "Siirry portille", "Myöhässä", "Peruttu"],
-  fr: ["Parti", "Dernier appel", "Embarquement", "Rendez-vous à la porte", "Retardé", "Annulé"],
-  hi: ["प्रस्थान", "अंतिम बुलावा", "बोर्डिंग", "गेट पर जाएँ", "विलंबित", "रद्द"],
-  hr: ["Poletio", "Posljednji poziv", "Ukrcavanje", "Idite na izlaz", "Odgođeno", "Otkazano"],
+  es: ["Ha salido", "Última llamada", "Embarque", "Diríjase a la puerta", "Retrasado", "Cancelado"],
+  fi: ["Lähtenyt", "Viimeinen kutsu", "Koneeseen nousu", "Siirry portille", "Myöhässä", "Peruttu"],
+  fr: ["Parti", "Dernier appel", "Embarquement", "Rendez-vous à la porte d’embarquement", "Retardé", "Annulé"],
+  hi: ["प्रस्थान कर चुका", "अंतिम बुलावा", "बोर्डिंग", "गेट पर जाएँ", "विलंबित", "रद्द"],
+  hr: ["Poletio", "Posljednji poziv", "Ukrcavanje", "Idite na izlaz", "Kasni", "Otkazano"],
   hu: ["Elindult", "Utolsó hívás", "Beszállás", "Fáradjon a kapuhoz", "Késik", "Törölve"],
-  id: ["Telah berangkat", "Panggilan terakhir", "Naik pesawat", "Menuju gerbang", "Tertunda", "Dibatalkan"],
+  id: ["Telah berangkat", "Panggilan terakhir", "Sedang naik pesawat", "Menuju gerbang", "Tertunda", "Dibatalkan"],
   it: ["Partito", "Ultima chiamata", "Imbarco", "Recarsi al gate", "In ritardo", "Cancellato"],
-  ja: ["出発済み", "最終案内", "搭乗中", "搭乗口へ", "遅延", "欠航"],
-  kk: ["Ұшып кетті", "Соңғы шақыру", "Отырғызу", "Шығу қақпасына өтіңіз", "Кешіктірілді", "Тоқтатылды"],
+  ja: ["出発済み", "最終搭乗案内", "搭乗中", "搭乗口へ", "遅延", "欠航"],
+  kk: ["Ұшып кетті", "Соңғы шақыру", "Отырғызу", "Шығу қақпасына өтіңіз", "Кешіктірілді", "Болдырылмады"],
   km: ["បានចេញដំណើរ", "ការហៅចុងក្រោយ", "កំពុងឡើងយន្តហោះ", "ទៅកាន់ច្រកទ្វារ", "ពន្យារពេល", "បានលុបចោល"],
   ky: ["Учуп кетти", "Акыркы чакыруу", "Отургузуу", "Дарбазага барыңыз", "Кечигүүдө", "Жокко чыгарылды"],
   lo: ["ອອກເດີນທາງແລ້ວ", "ເອີ້ນຄັ້ງສຸດທ້າຍ", "ກຳລັງຂຶ້ນເຮືອບິນ", "ໄປທີ່ປະຕູ", "ຊັກຊ້າ", "ຍົກເລີກ"],
-  mn: ["Хөөрсөн", "Сүүлийн дуудлага", "Онгоцонд сууж байна", "Гарц руу очно уу", "Хойшилсон", "Цуцлагдсан"],
-  ms: ["Telah berlepas", "Panggilan terakhir", "Sedang menaiki pesawat", "Pergi ke pintu", "Tertunda", "Dibatalkan"],
+  mn: ["Хөөрсөн", "Сүүлийн дуудлага", "Онгоцонд суулгаж байна", "Гарц руу очно уу", "Хойшилсон", "Цуцлагдсан"],
+  ms: ["Telah berlepas", "Panggilan terakhir", "Sedang menaiki pesawat", "Sila ke pintu pelepasan", "Lewat", "Dibatalkan"],
   my: ["ထွက်ခွာပြီး", "နောက်ဆုံးခေါ်ယူမှု", "လေယာဉ်တက်နေသည်", "ဂိတ်သို့သွားပါ", "နောက်ကျ", "ပယ်ဖျက်"],
   ne: ["प्रस्थान भयो", "अन्तिम आह्वान", "बोर्डिङ", "गेटमा जानुहोस्", "ढिलाइ", "रद्द"],
   nl: ["Vertrokken", "Laatste oproep", "Instappen", "Ga naar de gate", "Vertraagd", "Geannuleerd"],
@@ -207,9 +207,9 @@ const STATUS_TEXT = Object.freeze({
   tk: ["Uçdy", "Soňky çagyryş", "Uçara münmek", "Çykyş derwezesine geçiň", "Gijikdirildi", "Ýatyryldy"],
   tr: ["Kalktı", "Son çağrı", "Uçağa biniş", "Kapıya gidiniz", "Gecikmeli", "İptal"],
   uz: ["Jo'nab ketdi", "So'nggi chaqiruv", "Samolyotga chiqish", "Darvozaga boring", "Kechiktirildi", "Bekor qilindi"],
-  vi: ["Đã khởi hành", "Lời gọi cuối", "Đang lên máy bay", "Đến cửa khởi hành", "Bị hoãn", "Đã hủy"],
-  "zh-CN": ["已出发", "最后通知", "正在登机", "请前往登机口", "延误", "取消"],
-  "zh-TW": ["已出發", "最後通知", "登機中", "請前往登機門", "延誤", "取消"]
+  vi: ["Đã khởi hành", "Lần gọi cuối", "Đang lên máy bay", "Đến cửa khởi hành", "Bị chậm", "Đã hủy"],
+  "zh-CN": ["已出发", "最后召集", "正在登机", "请前往登机口", "延误", "取消"],
+  "zh-TW": ["已出發", "最後召集", "登機中", "請前往登機門", "延誤", "取消"]
 });
 
 const STATUS_INDEX = Object.freeze({
@@ -220,6 +220,28 @@ const STATUS_INDEX = Object.freeze({
   delayed: 4,
   cancelled: 5
 });
+
+const KOREAN_DESTINATION_ALIASES = Object.freeze({
+  김해: "부산/김해",
+  타이베이: "타이베이/타오위안"
+});
+
+export const formatDestinationName = (
+  destinationName,
+  showAirportName = true,
+  spaceAfterSlash = true
+) => {
+  const normalizedName = String(destinationName || "---")
+    .replace(/\s*\/\s*/g, "/")
+    .trim();
+  const visibleName = showAirportName
+    ? normalizedName
+    : normalizedName.split("/", 1)[0].trim();
+
+  return spaceAfterSlash
+    ? visibleName.replace(/\//g, "/ ")
+    : visibleName;
+};
 
 export const getStatusKey = (remark) => {
   const status = String(remark || "");
@@ -233,8 +255,11 @@ export const getStatusKey = (remark) => {
 };
 
 export const getDestinationName = (airportCode, koreanName, displayLanguage) => {
-  const translation = DESTINATIONS[String(airportCode || "").toUpperCase()];
-  if (displayLanguage === "ko") return koreanName || "---";
+  const normalizedAirportCode = String(airportCode || "").toUpperCase();
+  const translation = DESTINATIONS[normalizedAirportCode];
+  if (displayLanguage === "ko") {
+    return KOREAN_DESTINATION_ALIASES[koreanName] || koreanName || "---";
+  }
   if (!translation) return koreanName || "---";
   return displayLanguage === "en" ? translation.english : translation.local;
 };

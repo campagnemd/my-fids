@@ -11,6 +11,7 @@ import {
 import AirlineLogo from "./AirlineLogo";
 import { buildDisplayFlights } from "./displayFlights";
 import {
+    formatDestinationName,
     getDestinationName,
     getStatusKey,
     getStatusText
@@ -303,6 +304,8 @@ function App() {
     const [multilineCodeshare, setMultilineCodeshare] = useState(initialSettings.multilineCodeshare);
     const [showEnglish, setShowEnglish] = useState(initialSettings.showEnglish);
     const [showDestinationLanguage, setShowDestinationLanguage] = useState(initialSettings.showDestinationLanguage);
+    const [spaceAfterDestinationSlash, setSpaceAfterDestinationSlash] = useState(initialSettings.spaceAfterDestinationSlash);
+    const [showAirportName, setShowAirportName] = useState(initialSettings.showAirportName);
     const [showDeparted, setShowDeparted] = useState(initialSettings.showDeparted);
     const [showHeader, setShowHeader] = useState(initialSettings.showHeader);
     const [flightFirst, setFlightFirst] = useState(initialSettings.flightFirst);
@@ -369,6 +372,8 @@ function App() {
             multilineCodeshare,
             showEnglish,
             showDestinationLanguage,
+            spaceAfterDestinationSlash,
+            showAirportName,
             showDeparted,
             showHeader,
             flightFirst,
@@ -407,6 +412,7 @@ function App() {
         itemsPerPage, rowHeight, fontSize, fontFamily, boldFont, logoSize, pastHours, futureHours, apiSyncInterval,
         flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
         showCheckin, showCodeshare, multilineCodeshare, showEnglish, showDestinationLanguage,
+        spaceAfterDestinationSlash, showAirportName,
         showDeparted, showHeader, flightFirst,
         attachFooterToRows, terminalFilter, autoDestWidth,
         highlightChange, highlightTerminal, highlightCheckin, highlightGate, highlightCurrentTime,
@@ -441,6 +447,8 @@ function App() {
         setMultilineCodeshare(DEFAULT_SETTINGS.multilineCodeshare);
         setShowEnglish(DEFAULT_SETTINGS.showEnglish);
         setShowDestinationLanguage(DEFAULT_SETTINGS.showDestinationLanguage);
+        setSpaceAfterDestinationSlash(DEFAULT_SETTINGS.spaceAfterDestinationSlash);
+        setShowAirportName(DEFAULT_SETTINGS.showAirportName);
         setShowDeparted(DEFAULT_SETTINGS.showDeparted);
         setShowHeader(DEFAULT_SETTINGS.showHeader);
         setFlightFirst(DEFAULT_SETTINGS.flightFirst);
@@ -1161,10 +1169,14 @@ function App() {
                                 const destinationCell = (
                                     <div className="flex min-w-0 items-center overflow-hidden pl-3 text-left tracking-wide text-[#FFFFFF]">
                                         <OverflowText
-                                            text={getDestinationName(
-                                                flight.airportCode,
-                                                formatAirportName(flight.airport),
-                                                displayLanguage
+                                            text={formatDestinationName(
+                                                getDestinationName(
+                                                    flight.airportCode,
+                                                    formatAirportName(flight.airport),
+                                                    displayLanguage
+                                                ),
+                                                showAirportName,
+                                                spaceAfterDestinationSlash
                                             )}
                                             align="left"
                                         />
@@ -1435,6 +1447,22 @@ function App() {
                                         <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${showDestinationLanguage ? 'transform translate-x-4' : ''}`}></div>
                                     </div>
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showDestinationLanguage ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>도착지 언어 표시</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={spaceAfterDestinationSlash} onChange={() => setSpaceAfterDestinationSlash(!spaceAfterDestinationSlash)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${spaceAfterDestinationSlash ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${spaceAfterDestinationSlash ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${spaceAfterDestinationSlash ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>슬래시 뒤 공백</span>
+                                </label>
+                                <label className="flex items-center cursor-pointer group">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={showAirportName} onChange={() => setShowAirportName(!showAirportName)} />
+                                        <div className={`block w-7 h-3 rounded-full transition-colors ${showAirportName ? 'bg-[#4AF2A1]' : 'bg-[#1b3a6d]'}`}></div>
+                                        <div className={`dot absolute left-[2px] top-[2px] bg-white w-2 h-2 rounded-full transition-transform ${showAirportName ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className={`ml-3 text-[11px] tracking-wider transition-colors ${showAirportName ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>공항명 표기</span>
                                 </label>
                                 <label className="flex items-center cursor-pointer group">
                                     <div className="relative">

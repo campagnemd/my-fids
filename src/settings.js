@@ -83,6 +83,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   multilineCodeshare: true,
   showEnglish: true,
   showDestinationLanguage: true,
+  spaceAfterDestinationSlash: true,
+  showAirportName: true,
   showDeparted: false,
   showHeader: false,
   flightFirst: true,
