@@ -29,6 +29,79 @@ const getFormattedDate = (dateObj) => {
     return `${year}${month}${day}`;
 };
 
+const FLIGHT_CACHE_DATE_LIMIT = 3;
+const FLIGHT_CACHE_KEY_PATTERN = /^fids_raw_(?:data|time)_(\d{8})$/;
+
+const removeFlightCacheDate = (dateStr) => {
+    localStorage.removeItem(`fids_raw_data_${dateStr}`);
+    localStorage.removeItem(`fids_raw_time_${dateStr}`);
+};
+
+const pruneFlightCache = (dateToKeep, removeAllOtherDates = false) => {
+    const cachedDates = new Set([dateToKeep]);
+
+    for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        const match = key?.match(FLIGHT_CACHE_KEY_PATTERN);
+        if (match) cachedDates.add(match[1]);
+    }
+
+    const datesToKeep = removeAllOtherDates
+        ? new Set([dateToKeep])
+        : new Set([
+            dateToKeep,
+            ...[...cachedDates]
+                .filter((cachedDate) => cachedDate !== dateToKeep)
+                .sort((left, right) => right.localeCompare(left))
+                .slice(0, FLIGHT_CACHE_DATE_LIMIT - 1)
+        ]);
+
+    cachedDates.forEach((cachedDate) => {
+        if (!datesToKeep.has(cachedDate)) removeFlightCacheDate(cachedDate);
+    });
+};
+
+const isStorageQuotaError = (error) => (
+    error instanceof DOMException
+    && (
+        error.name === "QuotaExceededError"
+        || error.name === "NS_ERROR_DOM_QUOTA_REACHED"
+        || error.code === 22
+        || error.code === 1014
+    )
+);
+
+const saveFlightCache = (dateStr, itemList, successfulFetchAt) => {
+    const cacheKey = `fids_raw_data_${dateStr}`;
+    const cachedTimeKey = `fids_raw_time_${dateStr}`;
+    const serializedItems = JSON.stringify(itemList);
+
+    const writeCache = () => {
+        localStorage.setItem(cacheKey, serializedItems);
+        localStorage.setItem(cachedTimeKey, successfulFetchAt.toString());
+    };
+
+    try {
+        pruneFlightCache(dateStr);
+        writeCache();
+    } catch (error) {
+        if (!isStorageQuotaError(error)) {
+            console.warn(`항공편 캐시 저장 실패 (${dateStr}):`, error);
+            return;
+        }
+
+        try {
+            pruneFlightCache(dateStr, true);
+            writeCache();
+        } catch (retryError) {
+            try {
+                removeFlightCacheDate(dateStr);
+            } catch {}
+            console.warn(`항공편 캐시 용량 부족 (${dateStr}):`, retryError);
+        }
+    }
+};
+
 const formatAirportName = (airport) => (
     typeof airport === "string"
         ? airport
@@ -567,8 +640,7 @@ function App() {
             const itemList = Array.isArray(rawItems) ? rawItems : [];
             const successfulFetchAt = Date.now();
 
-            localStorage.setItem(cacheKey, JSON.stringify(itemList));
-            localStorage.setItem(cachedTimeKey, successfulFetchAt.toString());
+            saveFlightCache(dateStr, itemList, successfulFetchAt);
 
             return {
                 items: itemList,
