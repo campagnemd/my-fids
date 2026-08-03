@@ -29,6 +29,7 @@ pnpm dev
 
 ```bash
 pnpm check
+pnpm test
 pnpm build
 pnpm preview
 ```
@@ -44,6 +45,8 @@ DATA_GO_KR_SERVICE_KEY=공공데이터포털_인증키
 ```
 
 환경변수는 저장소에 커밋하지 않습니다. `main` 브랜치에 푸시하면 Vercel이 Vite 프로젝트를 자동으로 빌드하고 배포합니다.
+
+출발편 API의 성공 응답은 Vercel CDN에 5분간 공유 캐시됩니다. 캐시가 만료된 뒤 들어온 첫 요청은 공공데이터 API의 최신 응답을 기다린 후 CDN 캐시를 교체하며, 오류 응답은 캐시하지 않습니다.
 
 ## 항공사 로고
 

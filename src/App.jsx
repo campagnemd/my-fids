@@ -10,6 +10,7 @@ import {
 } from "./settings";
 import AirlineLogo from "./AirlineLogo";
 import { buildDisplayFlights } from "./displayFlights";
+import { combineDailyFlightResults } from "./flightData";
 import {
     formatDestinationName,
     getDestinationName,
@@ -273,7 +274,6 @@ function App() {
     const [showConfig, setShowConfig] = useState(false);
     const [openConfigSection, setOpenConfigSection] = useState("time");
     const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
-    const [showApiError, setShowApiError] = useState(false);
     const [apiRefreshFailed, setApiRefreshFailed] = useState(false);
     const boardRef = useRef(null);
     const [boardWidth, setBoardWidth] = useState(() => (
@@ -511,6 +511,8 @@ function App() {
 
     const filteredFlightsRef = useRef([]);
     const apiRetryTimerRef = useRef(null);
+    const activeFetchControllerRef = useRef(null);
+    const latestRequestIdRef = useRef(0);
     useEffect(() => {
         filteredFlightsRef.current = buildDisplayFlights(
             filteredFlights,
@@ -634,7 +636,7 @@ function App() {
         return () => clearInterval(codeshareTimer);
     }, [codeshareFlipInterval, multilineCodeshare, smoothTransition, showDisclaimer]);
 
-    const fetchSingleDayData = useCallback(async (dateStr, forceRefresh) => {
+    const fetchSingleDayData = useCallback(async (dateStr, forceRefresh, signal) => {
         const cacheKey = `fids_raw_data_${dateStr}`;
         const cachedTimeKey = `fids_raw_time_${dateStr}`;
         const cachedData = localStorage.getItem(cacheKey);
@@ -649,6 +651,7 @@ function App() {
                 if (Array.isArray(parsed)) {
                     return {
                         items: parsed,
+                        status: "cache-fallback",
                         networkAttempted: false,
                         networkSucceeded: false,
                         lastSuccessfulFetchAt: cachedTimestamp
@@ -662,7 +665,7 @@ function App() {
                 searchDate: dateStr
             });
             const targetUrl = `/api/departures?${params.toString()}`;
-            const response = await fetch(targetUrl);
+            const response = await fetch(targetUrl, { signal });
             if (!response.ok) throw new Error("API Network Error");
             
             const data = await response.json();
@@ -670,23 +673,32 @@ function App() {
             
             const rawItems = data?.response?.body?.items || [];
             const itemList = Array.isArray(rawItems) ? rawItems : [];
-            const successfulFetchAt = Date.now();
+            const serverFetchedAtHeader = response.headers.get("X-FIDS-Fetched-At");
+            const serverFetchedAt = Number(serverFetchedAtHeader);
+            const successfulFetchAt = serverFetchedAtHeader !== null
+                && Number.isFinite(serverFetchedAt)
+                && serverFetchedAt > 0
+                ? serverFetchedAt
+                : Date.now();
 
             saveFlightCache(dateStr, itemList, successfulFetchAt);
 
             return {
                 items: itemList,
+                status: "network-success",
                 networkAttempted: true,
                 networkSucceeded: true,
                 lastSuccessfulFetchAt: successfulFetchAt
             };
         } catch (err) {
+            if (signal?.aborted || err?.name === "AbortError") throw err;
             console.error(`데이터 호출 실패 (${dateStr}):`, err);
             try {
                 const backup = JSON.parse(cachedData);
                 if (Array.isArray(backup)) {
                     return {
                         items: backup,
+                        status: "cache-fallback",
                         networkAttempted: true,
                         networkSucceeded: false,
                         lastSuccessfulFetchAt: Number.isFinite(cachedTimestamp) ? cachedTimestamp : null
@@ -695,6 +707,7 @@ function App() {
             } catch {}
             return {
                 items: [],
+                status: "unavailable",
                 networkAttempted: true,
                 networkSucceeded: false,
                 lastSuccessfulFetchAt: null
@@ -702,7 +715,7 @@ function App() {
         }
     }, [apiSyncInterval]);
 
-    const fetchFlightData = useCallback(async (forceRefresh = false) => {
+    const fetchFlightData = useCallback(async (forceRefresh = false, signal) => {
         const now = new Date();
         const pastDate = new Date(now.getTime() - (pastHours * 60 * 60 * 1000));
         const futureDate = new Date(now.getTime() + (futureHours * 60 * 60 * 1000));
@@ -716,49 +729,10 @@ function App() {
         if (futureStr !== todayStr && !targetDates.includes(futureStr)) targetDates.push(futureStr);
 
         try {
-            const fetchResults = [];
-            for (const date of targetDates) {
-                const result = await fetchSingleDayData(date, forceRefresh);
-                fetchResults.push(result);
-            }
-            const datasets = fetchResults.map(result => result.items);
-            
-            const mergedItems = [];
-            const seenKeys = new Set();
-            const seenSchedules = new Set(); 
-            
-            if (datasets && Array.isArray(datasets)) {
-                datasets.flat().forEach(item => {
-                    const sched = item.scheduleDatetime || item.scheduleDateTime;
-                    if (!item || !item.flightId || !sched) return;
-                    
-                    const uniqueKey = `${item.flightId}_${sched}`;
-                    if (!seenKeys.has(uniqueKey)) {
-                        seenKeys.add(uniqueKey);
-                        
-                        let isSlave = false;
-                        if (item.codeshare === 'Y' || item.codeshare === 'True') isSlave = true;
-                        if (item.masterflightid && item.masterflightid !== item.flightId) isSlave = true;
-                        
-                        if (!isSlave) {
-                            const est = item.estimatedDatetime || item.estimatedDateTime || "";
-                            const fingerprint = `${sched}_${item.airport}_${est}_${item.gateNumber || 'nogate'}`;
-                            
-                            if (seenSchedules.has(fingerprint)) {
-                                isSlave = true; 
-                            } else {
-                                seenSchedules.add(fingerprint);
-                            }
-                        }
-                        item.isCodeshare = isSlave;
-                        mergedItems.push(item);
-                    }
-                });
-            }
-
-            if (mergedItems.length > 0) {
-                setFlights(mergedItems);
-            }
+            const fetchResults = await Promise.all(
+                targetDates.map((date) => fetchSingleDayData(date, forceRefresh, signal))
+            );
+            const combined = combineDailyFlightResults(fetchResults);
 
             const networkResults = fetchResults.filter(result => result.networkAttempted);
             const networkRefreshSucceeded = networkResults.length > 0 && networkResults.every(result => result.networkSucceeded);
@@ -768,22 +742,27 @@ function App() {
             const latestSuccessfulFetchAt = Math.max(...successfulFetchTimes);
             const earliestSuccessfulFetchAt = Math.min(...successfulFetchTimes);
 
-            if (Number.isFinite(latestSuccessfulFetchAt)) {
-                setLastUpdatedAt(latestSuccessfulFetchAt);
-            }
-
             return {
+                items: combined.items,
+                shouldReplaceFlights: combined.isComplete,
                 networkAttempted: networkResults.length > 0,
                 networkSucceeded: networkRefreshSucceeded,
+                lastSuccessfulFetchAt: Number.isFinite(latestSuccessfulFetchAt)
+                    ? latestSuccessfulFetchAt
+                    : null,
                 nextRefreshAt: Number.isFinite(earliestSuccessfulFetchAt)
                     ? earliestSuccessfulFetchAt + (apiSyncInterval * 60 * 1000)
                     : Date.now()
             };
         } catch (err) {
+            if (signal?.aborted || err?.name === "AbortError") throw err;
             console.error("데이터 병합 코어 에러:", err);
             return {
+                items: [],
+                shouldReplaceFlights: false,
                 networkAttempted: true,
                 networkSucceeded: false,
+                lastSuccessfulFetchAt: null,
                 nextRefreshAt: Date.now()
             };
         }
@@ -791,8 +770,6 @@ function App() {
 
     useEffect(() => {
         let disposed = false;
-        let consecutiveFailures = 0;
-        let failureWarningShown = false;
 
         const scheduleRefresh = (delay) => {
             if (disposed) return;
@@ -800,25 +777,45 @@ function App() {
         };
 
         const runRefresh = async (forceRefresh = false) => {
-            const result = await fetchFlightData(forceRefresh);
-            if (disposed) return;
+            activeFetchControllerRef.current?.abort();
+            const controller = new AbortController();
+            activeFetchControllerRef.current = controller;
+            const requestId = latestRequestIdRef.current + 1;
+            latestRequestIdRef.current = requestId;
+            let result;
+
+            try {
+                result = await fetchFlightData(forceRefresh, controller.signal);
+            } catch (error) {
+                if (controller.signal.aborted || error?.name === "AbortError") return;
+                console.error("데이터 갱신 처리 오류:", error);
+                result = {
+                    items: [],
+                    shouldReplaceFlights: false,
+                    networkAttempted: true,
+                    networkSucceeded: false,
+                    lastSuccessfulFetchAt: null,
+                    nextRefreshAt: Date.now()
+                };
+            }
+
+            if (disposed || requestId !== latestRequestIdRef.current) return;
+
+            if (result.shouldReplaceFlights) {
+                setFlights(result.items);
+                if (Number.isFinite(result.lastSuccessfulFetchAt)) {
+                    setLastUpdatedAt(result.lastSuccessfulFetchAt);
+                }
+            }
 
             if (result.networkAttempted && !result.networkSucceeded) {
-                consecutiveFailures += 1;
                 setApiRefreshFailed(true);
-                if (consecutiveFailures >= 2 && !failureWarningShown) {
-                    failureWarningShown = true;
-                    setShowApiError(true);
-                }
                 scheduleRefresh(60 * 1000);
                 return;
             }
 
             if (result.networkAttempted && result.networkSucceeded) {
-                consecutiveFailures = 0;
-                failureWarningShown = false;
                 setApiRefreshFailed(false);
-                setShowApiError(false);
             }
 
             scheduleRefresh(result.nextRefreshAt - Date.now());
@@ -827,6 +824,9 @@ function App() {
         runRefresh(false);
         return () => {
             disposed = true;
+            latestRequestIdRef.current += 1;
+            activeFetchControllerRef.current?.abort();
+            activeFetchControllerRef.current = null;
             if (apiRetryTimerRef.current) {
                 clearTimeout(apiRetryTimerRef.current);
                 apiRetryTimerRef.current = null;
@@ -836,29 +836,19 @@ function App() {
 
     const currentMinute = Math.floor(currentTime.getTime() / 60000);
     useEffect(() => {
-        if (!flights || flights.length === 0) return;
+        if (!flights || flights.length === 0) {
+            setFilteredFlights((previousFlights) => (
+                previousFlights.length === 0 ? previousFlights : []
+            ));
+            setCurrentPage(0);
+            return;
+        }
 
         const nowTimestamp = currentMinute * 60000;
         const startBoundary = nowTimestamp - (pastHours * 60 * 60 * 1000);   
         const endBoundary = nowTimestamp + (futureHours * 60 * 60 * 1000);  
 
-        const groups = {};
-        flights.forEach(item => {
-            const sched = String(item.scheduleDatetime || item.scheduleDateTime || '');
-            const est = item.estimatedDatetime || item.estimatedDateTime || "";
-            const fp = `${sched}_${item.airport}_${est}_${item.gateNumber || 'nogate'}`;
-            if (!groups[fp]) groups[fp] = [];
-            groups[fp].push(item);
-        });
-
-        const masterFlights = Object.values(groups).map(group => {
-            const master = group.find(g => !g.isCodeshare) || group[0];
-            const slaves = group.filter(g => g !== master);
-            const codeshareList = slaves.map(s => s.flightId).filter(Boolean);
-            return { ...master, codeshareList };
-        });
-
-        const processed = masterFlights.filter(flight => {
+        const processed = flights.filter(flight => {
             const sched = String(flight.scheduleDatetime || flight.scheduleDateTime || '');
             if (sched.length < 12) return false;
 
@@ -1106,28 +1096,6 @@ function App() {
                             className="w-full bg-[#3065bb] hover:bg-[#458cff] text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 font-sans tracking-widest text-lg"
                         >
                             동의
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {!showDisclaimer && showApiError && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-                    <div role="alertdialog" aria-modal="true" aria-labelledby="api-error-title" className="w-full max-w-md rounded-xl border border-[#D50000]/60 bg-[#030b1a] p-6 text-slate-300 shadow-2xl">
-                        <h2 id="api-error-title" className="text-xl tracking-wide text-white">
-                            <span className="mr-2 text-[#FF6D00]" aria-hidden="true">⚠️</span>
-                            데이터 업데이트 실패
-                        </h2>
-                        <p className="mt-4 text-sm leading-relaxed tracking-wide">
-                            항공편 데이터를 불러오지 못해 1분 후 다시 시도했지만 연결에 실패했습니다.
-                            현재 화면에는 마지막으로 저장된 데이터가 계속 표시될 수 있습니다.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={() => setShowApiError(false)}
-                            className="mt-6 w-full rounded-lg bg-[#3065bb] px-4 py-3 text-white hover:bg-[#458cff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4AF2A1]"
-                        >
-                            확인
                         </button>
                     </div>
                 </div>
@@ -1383,7 +1351,7 @@ function App() {
                                     </div>
                                     <div>
                                         <div className="flex justify-between">
-                                            <span>API 갱신 주기</span>
+                                            <span>API 데이터 갱신 주기</span>
                                             <span className="text-[#4AF2A1]">{apiSyncInterval} 분</span>
                                         </div>
                                         <input type="range" min="5" max="30" value={apiSyncInterval} onChange={(e) => setApiSyncInterval(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
