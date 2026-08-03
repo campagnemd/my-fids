@@ -274,6 +274,7 @@ function App() {
     const [openConfigSection, setOpenConfigSection] = useState("time");
     const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
     const [showApiError, setShowApiError] = useState(false);
+    const [apiRefreshFailed, setApiRefreshFailed] = useState(false);
     const boardRef = useRef(null);
     const [boardWidth, setBoardWidth] = useState(() => (
         typeof window === "undefined" ? 1920 : window.innerWidth
@@ -292,7 +293,11 @@ function App() {
     const [futureHours, setFutureHours] = useState(initialSettings.futureHours);
     const [apiSyncInterval, setApiSyncInterval] = useState(initialSettings.apiSyncInterval);
     const [flipInterval, setFlipInterval] = useState(initialSettings.flipInterval);
+    const [languageFlipInterval, setLanguageFlipInterval] = useState(initialSettings.languageFlipInterval);
+    const [autoLanguageFlipInterval, setAutoLanguageFlipInterval] = useState(initialSettings.autoLanguageFlipInterval);
     const [maxPages, setMaxPages] = useState(initialSettings.maxPages);
+    const [singlePageEnabled, setSinglePageEnabled] = useState(initialSettings.singlePageEnabled);
+    const [singlePageNumber, setSinglePageNumber] = useState(initialSettings.singlePageNumber);
     const [smoothTransition, setSmoothTransition] = useState(initialSettings.smoothTransition);
     const [isFading, setIsFading] = useState(false); 
     
@@ -363,7 +368,11 @@ function App() {
             futureHours,
             apiSyncInterval,
             flipInterval,
+            languageFlipInterval,
+            autoLanguageFlipInterval,
             maxPages,
+            singlePageEnabled,
+            singlePageNumber,
             smoothTransition,
             showLogo,
             showTerminal,
@@ -410,7 +419,8 @@ function App() {
         });
     }, [
         itemsPerPage, rowHeight, fontSize, fontFamily, boldFont, logoSize, pastHours, futureHours, apiSyncInterval,
-        flipInterval, maxPages, smoothTransition, showLogo, showTerminal,
+        flipInterval, languageFlipInterval, autoLanguageFlipInterval, maxPages,
+        singlePageEnabled, singlePageNumber, smoothTransition, showLogo, showTerminal,
         showCheckin, showCodeshare, multilineCodeshare, showEnglish, showDestinationLanguage,
         spaceAfterDestinationSlash, showAirportName,
         showDeparted, showHeader, flightFirst,
@@ -438,7 +448,11 @@ function App() {
         setFutureHours(DEFAULT_SETTINGS.futureHours);
         setApiSyncInterval(DEFAULT_SETTINGS.apiSyncInterval);
         setFlipInterval(DEFAULT_SETTINGS.flipInterval);
+        setLanguageFlipInterval(DEFAULT_SETTINGS.languageFlipInterval);
+        setAutoLanguageFlipInterval(DEFAULT_SETTINGS.autoLanguageFlipInterval);
         setMaxPages(DEFAULT_SETTINGS.maxPages);
+        setSinglePageEnabled(DEFAULT_SETTINGS.singlePageEnabled);
+        setSinglePageNumber(DEFAULT_SETTINGS.singlePageNumber);
         setSmoothTransition(DEFAULT_SETTINGS.smoothTransition);
         setShowLogo(DEFAULT_SETTINGS.showLogo);
         setShowTerminal(DEFAULT_SETTINGS.showTerminal);
@@ -548,50 +562,60 @@ function App() {
         ...(showEnglish ? ["en"] : []),
         ...(showDestinationLanguage ? ["destination"] : [])
     ], [showEnglish, showDestinationLanguage]);
-    const languageStepDuration = (flipInterval * 1000) / displayLanguages.length;
+    const effectiveLanguageFlipInterval = autoLanguageFlipInterval
+        ? flipInterval / displayLanguages.length
+        : languageFlipInterval;
+    const languageStepDuration = effectiveLanguageFlipInterval * 1000;
 
     useEffect(() => {
         setDisplayLanguage("ko");
     }, [showEnglish, showDestinationLanguage]);
 
     useEffect(() => {
-        if (showDisclaimer) return; // 약관 동의 전에는 페이지 전환을 하지 않음
+        if (showDisclaimer || singlePageEnabled) return undefined;
         const pageTimer = setInterval(() => {
             const totalItems = filteredFlightsRef.current.length;
             const actualMaxPage = Math.ceil(totalItems / itemsPerPage);
             const maxPageLimit = Math.min(actualMaxPage, maxPages);
-            const currentLanguageIndex = displayLanguages.indexOf(displayLanguage);
-            const nextLanguageIndex = (currentLanguageIndex + 1) % displayLanguages.length;
-            const shouldAdvancePage = nextLanguageIndex === 0;
+            if (totalItems > 0) setCurrentPage(page => (page + 1) % (maxPageLimit || 1));
+        }, flipInterval * 1000);
 
-            const advanceDisplay = () => {
-                setDisplayLanguage(displayLanguages[nextLanguageIndex]);
-                if (shouldAdvancePage && totalItems > 0) {
-                    setCurrentPage(p => (p + 1) % (maxPageLimit || 1));
-                }
+        return () => clearInterval(pageTimer);
+    }, [
+        flipInterval,
+        itemsPerPage,
+        maxPages,
+        singlePageEnabled,
+        showDisclaimer
+    ]);
+
+    useEffect(() => {
+        if (showDisclaimer || displayLanguages.length < 2) return undefined;
+
+        let fadeTimer = null;
+        const languageTimer = setInterval(() => {
+            const advanceLanguage = () => {
+                setDisplayLanguage(currentLanguage => {
+                    const currentIndex = displayLanguages.indexOf(currentLanguage);
+                    return displayLanguages[(Math.max(0, currentIndex) + 1) % displayLanguages.length];
+                });
+                setIsFading(false);
             };
 
             if (smoothTransition) {
                 setIsFading(true);
-                setTimeout(() => {
-                    advanceDisplay();
-                    setIsFading(false);
-                }, Math.min(500, languageStepDuration / 2));
+                fadeTimer = window.setTimeout(advanceLanguage, Math.min(500, languageStepDuration / 2));
             } else {
-                advanceDisplay();
+                advanceLanguage();
             }
         }, languageStepDuration);
 
-        return () => clearInterval(pageTimer);
-    }, [
-        displayLanguage,
-        displayLanguages,
-        itemsPerPage,
-        languageStepDuration,
-        maxPages,
-        smoothTransition,
-        showDisclaimer
-    ]);
+        return () => {
+            clearInterval(languageTimer);
+            if (fadeTimer) clearTimeout(fadeTimer);
+            setIsFading(false);
+        };
+    }, [displayLanguages, languageStepDuration, showDisclaimer, smoothTransition]);
 
     useEffect(() => {
         if (showDisclaimer || multilineCodeshare) return undefined;
@@ -678,20 +702,7 @@ function App() {
         }
     }, [apiSyncInterval]);
 
-    const fetchFlightData = useCallback(async function refreshFlightData(forceRefresh = false, isRetry = false) {
-        const handleRefreshFailure = () => {
-            if (isRetry) {
-                setShowApiError(true);
-                return;
-            }
-
-            if (apiRetryTimerRef.current) return;
-            apiRetryTimerRef.current = window.setTimeout(() => {
-                apiRetryTimerRef.current = null;
-                refreshFlightData(true, true);
-            }, 60 * 1000);
-        };
-
+    const fetchFlightData = useCallback(async (forceRefresh = false) => {
         const now = new Date();
         const pastDate = new Date(now.getTime() - (pastHours * 60 * 60 * 1000));
         const futureDate = new Date(now.getTime() + (futureHours * 60 * 60 * 1000));
@@ -751,43 +762,77 @@ function App() {
 
             const networkResults = fetchResults.filter(result => result.networkAttempted);
             const networkRefreshSucceeded = networkResults.length > 0 && networkResults.every(result => result.networkSucceeded);
-            const latestSuccessfulFetchAt = Math.max(
-                ...fetchResults
-                    .map(result => result.lastSuccessfulFetchAt)
-                    .filter(timestamp => Number.isFinite(timestamp))
-            );
+            const successfulFetchTimes = fetchResults
+                .map(result => result.lastSuccessfulFetchAt)
+                .filter(timestamp => Number.isFinite(timestamp));
+            const latestSuccessfulFetchAt = Math.max(...successfulFetchTimes);
+            const earliestSuccessfulFetchAt = Math.min(...successfulFetchTimes);
 
-            if (networkRefreshSucceeded && Number.isFinite(latestSuccessfulFetchAt)) {
-                if (apiRetryTimerRef.current) {
-                    window.clearTimeout(apiRetryTimerRef.current);
-                    apiRetryTimerRef.current = null;
-                }
+            if (Number.isFinite(latestSuccessfulFetchAt)) {
                 setLastUpdatedAt(latestSuccessfulFetchAt);
-                setShowApiError(false);
-            } else if (Number.isFinite(latestSuccessfulFetchAt)) {
-                setLastUpdatedAt(previous => Number.isFinite(previous) ? previous : latestSuccessfulFetchAt);
             }
 
-            if (networkResults.length > 0 && !networkRefreshSucceeded) {
-                handleRefreshFailure();
-            }
+            return {
+                networkAttempted: networkResults.length > 0,
+                networkSucceeded: networkRefreshSucceeded,
+                nextRefreshAt: Number.isFinite(earliestSuccessfulFetchAt)
+                    ? earliestSuccessfulFetchAt + (apiSyncInterval * 60 * 1000)
+                    : Date.now()
+            };
         } catch (err) {
             console.error("데이터 병합 코어 에러:", err);
-            handleRefreshFailure();
+            return {
+                networkAttempted: true,
+                networkSucceeded: false,
+                nextRefreshAt: Date.now()
+            };
         }
-    }, [fetchSingleDayData, futureHours, pastHours]);
+    }, [apiSyncInterval, fetchSingleDayData, futureHours, pastHours]);
 
     useEffect(() => {
-        fetchFlightData(false);
-        const autoRefresh = setInterval(() => fetchFlightData(true), apiSyncInterval * 60 * 1000);
+        let disposed = false;
+        let consecutiveFailures = 0;
+        let failureWarningShown = false;
+
+        const scheduleRefresh = (delay) => {
+            if (disposed) return;
+            apiRetryTimerRef.current = window.setTimeout(() => runRefresh(true), Math.max(250, delay));
+        };
+
+        const runRefresh = async (forceRefresh = false) => {
+            const result = await fetchFlightData(forceRefresh);
+            if (disposed) return;
+
+            if (result.networkAttempted && !result.networkSucceeded) {
+                consecutiveFailures += 1;
+                setApiRefreshFailed(true);
+                if (consecutiveFailures >= 2 && !failureWarningShown) {
+                    failureWarningShown = true;
+                    setShowApiError(true);
+                }
+                scheduleRefresh(60 * 1000);
+                return;
+            }
+
+            if (result.networkAttempted && result.networkSucceeded) {
+                consecutiveFailures = 0;
+                failureWarningShown = false;
+                setApiRefreshFailed(false);
+                setShowApiError(false);
+            }
+
+            scheduleRefresh(result.nextRefreshAt - Date.now());
+        };
+
+        runRefresh(false);
         return () => {
-            clearInterval(autoRefresh);
+            disposed = true;
             if (apiRetryTimerRef.current) {
                 clearTimeout(apiRetryTimerRef.current);
                 apiRetryTimerRef.current = null;
             }
         };
-    }, [fetchFlightData, apiSyncInterval]);
+    }, [fetchFlightData]);
 
     const currentMinute = Math.floor(currentTime.getTime() / 60000);
     useEffect(() => {
@@ -862,8 +907,15 @@ function App() {
     }, [currentMinute, flights, showDeparted, pastHours, futureHours, terminalFilter]);
 
     const displayFlights = buildDisplayFlights(filteredFlights, showCodeshare, multilineCodeshare);
-    const pageData = displayFlights.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage);
     const totalPages = Math.min(Math.ceil(displayFlights.length / itemsPerPage), maxPages);
+    const activePage = singlePageEnabled
+        ? Math.min(Math.max(0, singlePageNumber - 1), Math.max(0, totalPages - 1))
+        : Math.min(currentPage, Math.max(0, totalPages - 1));
+    const pageData = displayFlights.slice(activePage * itemsPerPage, (activePage + 1) * itemsPerPage);
+
+    useEffect(() => {
+        if (singlePageNumber > maxPages) setSinglePageNumber(maxPages);
+    }, [maxPages, singlePageNumber]);
 
     const formatTime = (timeStr) => {
         if (!timeStr) return "--:--";
@@ -1167,7 +1219,7 @@ function App() {
                                 };
 
                                 const destinationCell = (
-                                    <div className="flex min-w-0 items-center overflow-hidden pl-3 text-left tracking-wide text-[#FFFFFF]">
+                                    <div className={`flex min-w-0 items-center overflow-hidden pl-3 text-left tracking-wide text-[#FFFFFF] fade-content ${isFading ? "is-fading" : ""}`}>
                                         <OverflowText
                                             text={formatDestinationName(
                                                 getDestinationName(
@@ -1189,13 +1241,13 @@ function App() {
                                         {showCodeshare && renderFlightSlot(
                                             rightFlightId,
                                             "right",
-                                            !multilineCodeshare
+                                            !multilineCodeshare && codeshareList.length > 1
                                         )}
                                     </div>
                                 );
                                 
                                 return (
-                                    <div key={flight.displayRowKey || `${flight.flightId}-${idx}`} style={{ ...dynamicGridStyle, backgroundColor: currentRowBg }} className={`text-center items-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`}>
+                                    <div key={flight.displayRowKey || `${flight.flightId}-${idx}`} style={{ ...dynamicGridStyle, backgroundColor: currentRowBg }} className="text-center items-center transition-colors duration-300">
                                         
                                         <div className="flex min-w-0 items-center justify-center text-center text-[#FFFFFF]"><OverflowText text={schedTime} /></div>
                                         
@@ -1229,14 +1281,14 @@ function App() {
                                         
                                         <div className="flex min-w-0 items-center justify-center text-center" style={{ color: highlightGate ? highlightTextColor : "#ffffff" }}><OverflowText text={flight.gateNumber || "—"} /></div>
                                         
-                                        <div className="h-full w-full flex items-center justify-center">
+                                        <div className={`h-full w-full flex items-center justify-center fade-content ${isFading ? "is-fading" : ""}`}>
                                             {renderStatusAndStyle(flight)}
                                         </div>
                                     </div>
                                 );
                             })
                         ) : (
-                            <div className={`text-center text-[#458cff] tracking-widest uppercase bg-[#134dab]/20 flex items-center justify-center transition-colors duration-300 fade-content ${isFading ? 'is-fading' : ''}`} style={{ height: `${rowHeight * 5}px`, fontSize: `${fontSize}px`, backgroundColor: oddRowColor }}>
+                            <div className="text-center text-[#458cff] tracking-widest uppercase bg-[#134dab]/20 flex items-center justify-center transition-colors duration-300" style={{ height: `${rowHeight * 5}px`, fontSize: `${fontSize}px`, backgroundColor: oddRowColor }}>
                                 <span>조건에 맞는 비행 데이터가 없거나 불러오는 중입니다...</span>
                             </div>
                         )}
@@ -1377,13 +1429,39 @@ function App() {
                                 id="pages"
                                 isOpen={openConfigSection === "pages"}
                             >
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                                 <div>
                                     <div className="flex justify-between">
                                         <span>페이지 전환 간격</span>
                                         <span className="text-[#4AF2A1]">{flipInterval} 초</span>
                                     </div>
                                     <input type="range" min="5" max="60" value={flipInterval} onChange={(e) => setFlipInterval(parseInt(e.target.value))} className="w-full mt-1 accent-[#458cff] bg-[#051126] h-2 rounded-lg appearance-none cursor-pointer" />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between gap-3">
+                                        <span>언어 전환 간격</span>
+                                        <span className="text-[#4AF2A1]">
+                                            {Number.isInteger(effectiveLanguageFlipInterval) ? effectiveLanguageFlipInterval : effectiveLanguageFlipInterval.toFixed(1)} 초
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="60"
+                                        value={autoLanguageFlipInterval ? Math.max(1, Math.round(effectiveLanguageFlipInterval)) : languageFlipInterval}
+                                        onChange={(event) => setLanguageFlipInterval(parseInt(event.target.value, 10))}
+                                        disabled={autoLanguageFlipInterval}
+                                        className={`mt-1 h-2 w-full appearance-none rounded-lg bg-[#051126] accent-[#458cff] ${autoLanguageFlipInterval ? "cursor-not-allowed opacity-45" : "cursor-pointer"}`}
+                                    />
+                                    <label className="mt-3 flex cursor-pointer items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={autoLanguageFlipInterval}
+                                            onChange={(event) => setAutoLanguageFlipInterval(event.target.checked)}
+                                            className="mr-2 accent-[#458cff]"
+                                        />
+                                        <span className={autoLanguageFlipInterval ? "text-[#4AF2A1]" : "text-slate-400"}>자동</span>
+                                    </label>
                                 </div>
                                 <div>
                                     <div className="flex justify-between">
@@ -1512,6 +1590,32 @@ function App() {
                                     </div>
                                     <span className={`ml-3 text-[11px] tracking-wider transition-colors ${attachFooterToRows ? 'text-[#4AF2A1]' : 'text-slate-400'}`}>페이지 바를 마지막 줄 아래에 표시</span>
                                 </label>
+                                <div className="col-span-2 flex items-center gap-3 md:col-span-2">
+                                    <label className="flex cursor-pointer items-center group">
+                                        <div className="relative">
+                                            <input type="checkbox" className="sr-only" checked={singlePageEnabled} onChange={(event) => setSinglePageEnabled(event.target.checked)} />
+                                            <div className={`block h-3 w-7 rounded-full transition-colors ${singlePageEnabled ? "bg-[#4AF2A1]" : "bg-[#1b3a6d]"}`}></div>
+                                            <div className={`dot absolute left-[2px] top-[2px] h-2 w-2 rounded-full bg-white transition-transform ${singlePageEnabled ? "translate-x-4" : ""}`}></div>
+                                        </div>
+                                        <span className={`ml-3 whitespace-nowrap text-[11px] tracking-wider transition-colors ${singlePageEnabled ? "text-[#4AF2A1]" : "text-slate-400"}`}>단일 페이지만 표시</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 text-[11px] text-slate-300">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max={maxPages}
+                                            value={singlePageNumber}
+                                            onChange={(event) => {
+                                                const value = Number(event.target.value);
+                                                if (Number.isFinite(value)) setSinglePageNumber(Math.min(maxPages, Math.max(1, Math.round(value))));
+                                            }}
+                                            disabled={!singlePageEnabled}
+                                            aria-label="고정 표시 페이지 번호"
+                                            className="h-8 w-16 rounded border border-[#162e58] bg-[#051126] px-2 text-center text-xs text-white outline-none focus:border-[#458cff] disabled:opacity-45"
+                                        />
+                                        <span>/ {maxPages} P</span>
+                                    </label>
+                                </div>
                                 <label className="flex items-center gap-3 text-[11px] tracking-wider text-slate-300">
                                     <span className="shrink-0">터미널 항공편</span>
                                     <select
@@ -1728,11 +1832,16 @@ function App() {
                                 <path d="M3 5.5h18M3 12h18M3 18.5h18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" />
                             </svg>
                         </button>
+                        {apiRefreshFailed && (
+                            <span role="status" className="ml-1 whitespace-nowrap text-xs tracking-wide text-[#FF5252] sm:text-sm">
+                                [데이터 갱신 실패]
+                            </span>
+                        )}
                     </div>
                     
                     {totalPages > 1 && (
                         <div className="absolute left-1/2 top-0 transform -translate-x-1/2 text-white tracking-widest h-full flex items-center pointer-events-none" style={{ fontSize: `${fontSize}px` }}>
-                            {currentPage + 1}
+                            {activePage + 1}
                         </div>
                     )}
 
