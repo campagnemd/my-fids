@@ -1090,6 +1090,19 @@ function App() {
                                     세부적인 전광판 설정을 직접 제어하실 수 있습니다.
                                 </p>
                             </div>
+                            <div className="pt-4 border-t border-[#162e58] text-slate-400">
+                                <p>
+                                    제작: <strong className="text-white">JaySolio Studio</strong>
+                                </p>
+                                <p className="mt-1">
+                                    문의: <a
+                                        href="mailto:jaysoliostudio@gmail.com"
+                                        className="text-[#4AF2A1] hover:text-white underline underline-offset-4 transition-colors"
+                                    >
+                                        jaysoliostudio@gmail.com
+                                    </a>
+                                </p>
+                            </div>
                         </div>
                         <button 
                             onClick={() => setShowDisclaimer(false)} 
